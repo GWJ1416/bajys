@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>币安K线分析工具 - 实时数据</title>
+    <title>币安K线分析工具 - 交易对管理</title>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         * {
@@ -104,7 +104,7 @@
             color: #4cc9f0;
         }
         
-        select, button {
+        select, button, input {
             padding: 12px 15px;
             border-radius: 8px;
             border: none;
@@ -114,7 +114,7 @@
             transition: all 0.3s ease;
         }
         
-        select:focus, button:hover {
+        select:focus, button:hover, input:focus {
             outline: none;
             background: rgba(67, 97, 238, 0.8);
             cursor: pointer;
@@ -123,7 +123,10 @@
         button {
             background: linear-gradient(90deg, #4cc9f0, #4361ee);
             font-weight: 600;
-            margin-top: 25px;
+        }
+        
+        input {
+            width: 100%;
         }
         
         .chart-container {
@@ -345,12 +348,105 @@
             line-height: 1.6;
             margin-bottom: 10px;
         }
+        
+        .symbol-management {
+            background: rgba(30, 30, 46, 0.7);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .symbol-management h3 {
+            color: #4cc9f0;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #30475e;
+        }
+        
+        .symbol-controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .symbol-input-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        
+        .symbol-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .symbol-item {
+            background: rgba(48, 71, 94, 0.5);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .symbol-item:hover {
+            background: rgba(67, 97, 238, 0.5);
+        }
+        
+        .symbol-item.active {
+            background: rgba(76, 175, 80, 0.5);
+            border: 1px solid #4caf50;
+        }
+        
+        .symbol-item .remove-btn {
+            background: rgba(244, 67, 54, 0.3);
+            color: #f44336;
+            border: none;
+            border-radius: 4px;
+            padding: 2px 6px;
+            margin-top: 5px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        
+        .symbol-item .remove-btn:hover {
+            background: rgba(244, 67, 54, 0.5);
+        }
+        
+        .message {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            text-align: center;
+        }
+        
+        .message.success {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4caf50;
+        }
+        
+        .message.error {
+            background: rgba(244, 67, 54, 0.2);
+            color: #f44336;
+        }
+        
+        .popular-symbols {
+            margin-top: 20px;
+        }
+        
+        .popular-symbols h4 {
+            color: #4cc9f0;
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>币安K线分析工具 - 实时数据</h1>
+            <h1>币安K线分析工具 - 交易对管理</h1>
             <p class="subtitle">实时K线图、支撑阻力位、超买超卖信号与深度数据分析</p>
         </header>
         
@@ -366,11 +462,7 @@
             <div class="control-group">
                 <label for="symbol">交易对</label>
                 <select id="symbol">
-                    <option value="BTCUSDT">BTC/USDT</option>
-                    <option value="ETHUSDT">ETH/USDT</option>
-                    <option value="BNBUSDT">BNB/USDT</option>
-                    <option value="ADAUSDT">ADA/USDT</option>
-                    <option value="DOTUSDT">DOT/USDT</option>
+                    <!-- 交易对将通过JavaScript动态添加 -->
                 </select>
             </div>
             
@@ -398,6 +490,33 @@
             
             <button id="fetchData">获取数据</button>
             <button id="toggleRealtime">开启实时更新</button>
+        </div>
+        
+        <div class="symbol-management">
+            <h3>交易对管理</h3>
+            <div class="symbol-controls">
+                <div class="symbol-input-group">
+                    <label for="newSymbol">添加交易对 (如: BTCUSDT)</label>
+                    <input type="text" id="newSymbol" placeholder="输入交易对符号" maxlength="20">
+                </div>
+                <button id="addSymbol" style="margin-top: 25px;">添加交易对</button>
+            </div>
+            
+            <div id="messageArea"></div>
+            
+            <div class="popular-symbols">
+                <h4>常用交易对</h4>
+                <div class="symbol-list" id="popularSymbols">
+                    <!-- 常用交易对将通过JavaScript动态添加 -->
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px;">
+                <h4>我的交易对</h4>
+                <div class="symbol-list" id="customSymbols">
+                    <!-- 自定义交易对将通过JavaScript动态添加 -->
+                </div>
+            </div>
         </div>
         
         <div class="chart-container">
@@ -542,24 +661,6 @@
             </div>
         </div>
         
-        <div class="explanation-box">
-            <h3>数据点数说明</h3>
-            <p><strong>数据点数</strong>是指从币安API获取的K线数据的数量。</p>
-            <p>例如：</p>
-            <ul>
-                <li>选择50个数据点 + 1小时时间周期 = 显示最近50小时的K线数据</li>
-                <li>选择100个数据点 + 15分钟时间周期 = 显示最近100个15分钟K线数据（共25小时）</li>
-                <li>选择500个数据点 + 1天时间周期 = 显示最近500天的K线数据</li>
-            </ul>
-            <p>数据点数越多，图表显示的历史数据越长，但计算技术指标所需的时间也越长。</p>
-            <p>建议根据您的分析需求选择合适的数据点数：</p>
-            <ul>
-                <li><strong>短期分析</strong>：50-100个数据点</li>
-                <li><strong>中期分析</strong>：100-200个数据点</li>
-                <li><strong>长期分析</strong>：200-500个数据点</li>
-            </ul>
-        </div>
-        
         <footer>
             <p>数据来源: 币安API | 本工具仅用于技术分析参考，不构成投资建议</p>
         </footer>
@@ -578,6 +679,17 @@
         let realtimeEnabled = false;
         let websocket = null;
         let updateInterval = null;
+        
+        // 交易对管理
+        let customSymbols = [];
+        
+        // 常用交易对列表
+        const popularSymbols = [
+            'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'DOTUSDT',
+            'XRPUSDT', 'LTCUSDT', 'LINKUSDT', 'BCHUSDT', 'XLMUSDT',
+            'EOSUSDT', 'TRXUSDT', 'ETCUSDT', 'XTZUSDT', 'ATOMUSDT',
+            'SOLUSDT', 'AVAXUSDT', 'MATICUSDT', 'ALGOUSDT', 'NEARUSDT'
+        ];
         
         // 默认图表配置
         const defaultOption = {
@@ -656,6 +768,179 @@
         klineChart.setOption(defaultOption);
         rsiChart.setOption(defaultOption);
         
+        // 从本地存储加载自定义交易对
+        function loadCustomSymbols() {
+            const savedSymbols = localStorage.getItem('customSymbols');
+            if (savedSymbols) {
+                customSymbols = JSON.parse(savedSymbols);
+            }
+            updateSymbolSelect();
+            renderCustomSymbols();
+        }
+        
+        // 保存自定义交易对到本地存储
+        function saveCustomSymbols() {
+            localStorage.setItem('customSymbols', JSON.stringify(customSymbols));
+        }
+        
+        // 更新交易对选择下拉列表
+        function updateSymbolSelect() {
+            const symbolSelect = document.getElementById('symbol');
+            symbolSelect.innerHTML = '';
+            
+            // 添加常用交易对
+            popularSymbols.forEach(symbol => {
+                const option = document.createElement('option');
+                option.value = symbol;
+                option.textContent = symbol.replace('USDT', '/USDT');
+                if (symbol === currentSymbol) {
+                    option.selected = true;
+                }
+                symbolSelect.appendChild(option);
+            });
+            
+            // 添加自定义交易对
+            customSymbols.forEach(symbol => {
+                const option = document.createElement('option');
+                option.value = symbol;
+                option.textContent = symbol.replace('USDT', '/USDT');
+                if (symbol === currentSymbol) {
+                    option.selected = true;
+                }
+                symbolSelect.appendChild(option);
+            });
+        }
+        
+        // 渲染常用交易对
+        function renderPopularSymbols() {
+            const popularSymbolsContainer = document.getElementById('popularSymbols');
+            popularSymbolsContainer.innerHTML = '';
+            
+            popularSymbols.forEach(symbol => {
+                const symbolElement = document.createElement('div');
+                symbolElement.className = `symbol-item ${symbol === currentSymbol ? 'active' : ''}`;
+                symbolElement.textContent = symbol.replace('USDT', '/USDT');
+                symbolElement.dataset.symbol = symbol;
+                
+                symbolElement.addEventListener('click', () => {
+                    selectSymbol(symbol);
+                });
+                
+                popularSymbolsContainer.appendChild(symbolElement);
+            });
+        }
+        
+        // 渲染自定义交易对
+        function renderCustomSymbols() {
+            const customSymbolsContainer = document.getElementById('customSymbols');
+            customSymbolsContainer.innerHTML = '';
+            
+            if (customSymbols.length === 0) {
+                customSymbolsContainer.innerHTML = '<p style="text-align: center; color: #a0a0a0; grid-column: 1 / -1;">暂无自定义交易对</p>';
+                return;
+            }
+            
+            customSymbols.forEach(symbol => {
+                const symbolElement = document.createElement('div');
+                symbolElement.className = `symbol-item ${symbol === currentSymbol ? 'active' : ''}`;
+                symbolElement.textContent = symbol.replace('USDT', '/USDT');
+                symbolElement.dataset.symbol = symbol;
+                
+                symbolElement.addEventListener('click', () => {
+                    selectSymbol(symbol);
+                });
+                
+                // 添加删除按钮
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-btn';
+                removeBtn.textContent = '删除';
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    removeSymbol(symbol);
+                });
+                
+                symbolElement.appendChild(removeBtn);
+                customSymbolsContainer.appendChild(symbolElement);
+            });
+        }
+        
+        // 选择交易对
+        function selectSymbol(symbol) {
+            currentSymbol = symbol;
+            updateSymbolSelect();
+            renderPopularSymbols();
+            renderCustomSymbols();
+            
+            // 自动获取数据
+            fetchKlineData(currentSymbol, currentInterval, currentLimit);
+        }
+        
+        // 添加交易对
+        function addSymbol() {
+            const newSymbolInput = document.getElementById('newSymbol');
+            const symbol = newSymbolInput.value.trim().toUpperCase();
+            
+            if (!symbol) {
+                showMessage('请输入交易对符号', 'error');
+                return;
+            }
+            
+            // 验证交易对格式
+            if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
+                showMessage('交易对格式不正确，请输入有效的交易对符号（如：BTCUSDT）', 'error');
+                return;
+            }
+            
+            // 检查是否已存在
+            if (popularSymbols.includes(symbol) || customSymbols.includes(symbol)) {
+                showMessage('该交易对已存在', 'error');
+                return;
+            }
+            
+            // 添加到自定义交易对
+            customSymbols.push(symbol);
+            saveCustomSymbols();
+            updateSymbolSelect();
+            renderCustomSymbols();
+            
+            // 清空输入框
+            newSymbolInput.value = '';
+            
+            showMessage(`交易对 ${symbol} 添加成功`, 'success');
+            
+            // 自动选择新添加的交易对
+            selectSymbol(symbol);
+        }
+        
+        // 删除交易对
+        function removeSymbol(symbol) {
+            const index = customSymbols.indexOf(symbol);
+            if (index !== -1) {
+                customSymbols.splice(index, 1);
+                saveCustomSymbols();
+                updateSymbolSelect();
+                renderCustomSymbols();
+                
+                showMessage(`交易对 ${symbol} 已删除`, 'success');
+                
+                // 如果删除的是当前选中的交易对，切换到第一个常用交易对
+                if (symbol === currentSymbol) {
+                    selectSymbol(popularSymbols[0]);
+                }
+            }
+        }
+        
+        // 显示消息
+        function showMessage(message, type) {
+            const messageArea = document.getElementById('messageArea');
+            messageArea.innerHTML = `<div class="message ${type}">${message}</div>`;
+            
+            // 3秒后自动清除消息
+            setTimeout(() => {
+                messageArea.innerHTML = '';
+            }, 3000);
+        }
+        
         // 更新连接状态
         function updateConnectionStatus(connected) {
             const indicator = document.getElementById('statusIndicator');
@@ -685,6 +970,11 @@
                 
                 const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
                 const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 
                 // 处理K线数据
@@ -729,7 +1019,12 @@
             } catch (error) {
                 console.error('获取数据失败:', error);
                 updateConnectionStatus(false);
-                alert('获取数据失败，请检查网络连接或稍后重试');
+                
+                if (error.message.includes('400')) {
+                    showMessage(`交易对 ${symbol} 不存在或无法访问`, 'error');
+                } else {
+                    showMessage('获取数据失败，请检查网络连接或稍后重试', 'error');
+                }
             } finally {
                 document.getElementById('fetchData').textContent = '获取数据';
                 document.getElementById('fetchData').disabled = false;
@@ -1351,8 +1646,11 @@
         
         // 页面加载完成后初始化
         window.addEventListener('load', function() {
+            // 加载自定义交易对
+            loadCustomSymbols();
+            renderPopularSymbols();
+            
             // 设置默认值
-            currentSymbol = document.getElementById('symbol').value;
             currentInterval = document.getElementById('interval').value;
             currentLimit = document.getElementById('limit').value;
             
@@ -1375,6 +1673,23 @@
             });
             
             document.getElementById('toggleRealtime').addEventListener('click', toggleRealtimeUpdates);
+            
+            // 绑定添加交易对事件
+            document.getElementById('addSymbol').addEventListener('click', addSymbol);
+            
+            // 按Enter键添加交易对
+            document.getElementById('newSymbol').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addSymbol();
+                }
+            });
+            
+            // 当下拉选择改变时，更新当前选中的交易对
+            document.getElementById('symbol').addEventListener('change', function() {
+                currentSymbol = this.value;
+                renderPopularSymbols();
+                renderCustomSymbols();
+            });
         });
         
         // 窗口大小改变时调整图表大小
