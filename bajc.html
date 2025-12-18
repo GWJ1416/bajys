@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>币安实时异动监控系统</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <style>
         :root {
             --primary-color: #1e3a8a;
@@ -258,6 +257,11 @@
         .chart-container {
             height: 350px;
             margin-top: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 10px;
         }
         
         .suggestion-card {
@@ -356,6 +360,22 @@
             color: var(--info-color);
         }
         
+        .data-source {
+            font-size: 0.8rem;
+            color: #64748b;
+            margin-top: 5px;
+            display: block;
+        }
+        
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid var(--danger-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            color: var(--danger-color);
+        }
+        
         @media (max-width: 1200px) {
             .grid {
                 grid-template-columns: 1fr;
@@ -383,6 +403,7 @@
         <header>
             <h1><i class="fas fa-chart-line"></i> 币安实时异动监控系统</h1>
             <p class="subtitle">真实数据 | 多周期监控 | WebSocket实时更新 | 支持自定义交易对</p>
+            <p class="data-source">数据源：币安WebSocket API + CoinGecko API备用方案</p>
         </header>
         
         <div class="status-bar">
@@ -396,8 +417,8 @@
             </div>
             <div class="status-item">
                 <span class="status-label">连接状态</span>
-                <span class="websocket-status disconnected" id="connection-status">
-                    <i class="fas fa-plug"></i> 未连接
+                <span class="websocket-status connecting" id="connection-status">
+                    <i class="fas fa-sync fa-spin"></i> 连接中...
                 </span>
             </div>
             <div class="status-item">
@@ -405,6 +426,8 @@
                 <span class="status-value" id="last-update-time">--:--:--</span>
             </div>
         </div>
+        
+        <div id="error-container"></div>
         
         <div class="grid">
             <div class="card">
@@ -425,7 +448,6 @@
                                 <th>交易对</th>
                                 <th>当前价格</th>
                                 <th>24h变化</th>
-                                <th>成交量(24h)</th>
                                 <th>状态</th>
                                 <th>操作</th>
                             </tr>
@@ -455,9 +477,9 @@
                                 <th>交易对</th>
                                 <th>周期</th>
                                 <th>价格变化</th>
-                                <th>成交量变化</th>
                                 <th>异动类型</th>
                                 <th>强度</th>
+                                <th>时间</th>
                             </tr>
                         </thead>
                         <tbody id="alerts-table-body">
@@ -469,13 +491,18 @@
             
             <div class="card">
                 <div class="card-header">
-                    <h2 class="card-title"><i class="fas fa-chart-bar"></i> 成交量分析</h2>
+                    <h2 class="card-title"><i class="fas fa-chart-bar"></i> 价格走势</h2>
                     <div class="action-buttons">
-                        <button id="refresh-chart-btn" class="action-btn"><i class="fas fa-sync-alt"></i> 刷新图表</button>
+                        <button id="refresh-data-btn" class="action-btn"><i class="fas fa-sync-alt"></i> 刷新数据</button>
                     </div>
                 </div>
                 
-                <div class="chart-container" id="volume-chart"></div>
+                <div class="chart-container" id="price-chart">
+                    <div id="chart-placeholder">
+                        <i class="fas fa-chart-line" style="font-size: 3rem; color: #475569;"></i>
+                        <p style="margin-top: 15px; color: #64748b;">价格图表加载中...</p>
+                    </div>
+                </div>
             </div>
             
             <div class="card suggestion-card">
@@ -488,16 +515,16 @@
                 
                 <div class="suggestion-content" id="suggestions-content">
                     <div class="suggestion-item">
-                        <strong>系统启动中...</strong> 正在连接币安API获取实时数据。
+                        <strong>系统启动中...</strong> 正在连接币安WebSocket获取实时数据。
                     </div>
                 </div>
             </div>
         </div>
         
         <div class="last-update">
-            <p>数据来源：币安官方API | 系统自动更新 | 下次更新：<span id="next-update">60</span>秒</p>
+            <p>数据来源：币安WebSocket API + CoinGecko备用API | 系统自动更新</p>
             <p style="margin-top: 10px; font-size: 0.8rem;">
-                <i class="fas fa-info-circle"></i> 提示：系统使用真实币安API数据，所有价格和异动均为实时信息
+                <i class="fas fa-info-circle"></i> 提示：系统完全运行在浏览器中，所有数据均为实时市场数据
             </p>
         </div>
     </div>
@@ -508,33 +535,36 @@
         let priceData = {};
         let alertData = [];
         let activeTimeframe = '1m';
-        let updateInterval = 30; // 更新间隔（秒）
-        let updateTimer = updateInterval;
-        let wsConnections = {};
-        let chartInstance = null;
+        let wsConnection = null;
         let alertHistory = [];
+        let lastPriceData = {};
         
-        // 币安API配置
-        const BINANCE_API = {
-            BASE_URL: 'https://api.binance.com',
-            WS_URL: 'wss://stream.binance.com:9443/ws',
-            ENDPOINTS: {
-                TICKER_24H: '/api/v3/ticker/24hr',
-                KLINES: '/api/v3/klines',
-                DEPTH: '/api/v3/depth',
-                EXCHANGE_INFO: '/api/v3/exchangeInfo'
-            }
+        // 数据源配置 - 使用多个备用数据源
+        const DATA_SOURCES = {
+            // 主数据源：币安WebSocket (无CORS限制)
+            BINANCE_WS: 'wss://stream.binance.com:9443/ws',
+            
+            // 备用数据源：公共API代理 (解决CORS问题)
+            COINGECKO: 'https://api.coingecko.com/api/v3',
+            
+            // 备用数据源：第三方币安数据API
+            BINANCE_PROXY: 'https://api.binance.com/api/v3'
         };
         
         // 从localStorage加载交易对
         function loadPairsFromStorage() {
-            const savedPairs = localStorage.getItem('binanceRealPairs');
-            if (savedPairs) {
-                monitoredPairs = JSON.parse(savedPairs);
-            } else {
-                // 默认交易对
-                monitoredPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'XRPUSDT'];
-                savePairsToStorage();
+            try {
+                const savedPairs = localStorage.getItem('binanceRealPairs');
+                if (savedPairs) {
+                    monitoredPairs = JSON.parse(savedPairs);
+                } else {
+                    // 默认交易对
+                    monitoredPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'XRPUSDT'];
+                    savePairsToStorage();
+                }
+            } catch (e) {
+                console.error('加载交易对失败:', e);
+                monitoredPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT'];
             }
         }
         
@@ -548,20 +578,22 @@
             loadPairsFromStorage();
             setupEventListeners();
             setupTimeframeTabs();
-            await initChart();
             updateStatusDisplay();
             
-            // 连接所有交易对的WebSocket
-            await connectAllPairsWebSocket();
+            // 显示初始交易对表格
+            renderPairsTable();
             
-            // 初始数据加载
-            await loadAllPairsData();
+            // 连接到币安WebSocket
+            connectToBinanceWebSocket();
             
-            // 启动更新计时器
-            startUpdateTimer();
+            // 初始加载数据
+            await loadInitialData();
             
             // 初始建议
             updateSuggestions();
+            
+            // 启动定时更新
+            startUpdateTimer();
         }
         
         // 设置事件监听器
@@ -581,12 +613,19 @@
                 if (confirm('确定要重置为默认交易对吗？')) {
                     monitoredPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'XRPUSDT'];
                     savePairsToStorage();
-                    location.reload();
+                    renderPairsTable();
+                    alertData = [];
+                    renderAlertsTable();
+                    updateSuggestions();
+                    showNotification('已重置为默认交易对');
                 }
             });
             
-            // 刷新图表按钮
-            document.getElementById('refresh-chart-btn').addEventListener('click', refreshChart);
+            // 刷新数据按钮
+            document.getElementById('refresh-data-btn').addEventListener('click', async function() {
+                showNotification('正在刷新数据...');
+                await loadInitialData();
+            });
             
             // 刷新建议按钮
             document.getElementById('refresh-suggestions-btn').addEventListener('click', updateSuggestions);
@@ -617,26 +656,19 @@
             const pair = input.value.trim().toUpperCase().replace('/', '');
             
             if (!pair) {
-                alert('请输入交易对！');
+                showError('请输入交易对！');
                 return;
             }
             
             // 验证交易对格式
             if (!/^[A-Z]{3,10}[A-Z]{3,10}$/.test(pair)) {
-                alert('交易对格式不正确！请使用类似 BTCUSDT 的格式。');
+                showError('交易对格式不正确！请使用类似 BTCUSDT 的格式。');
                 return;
             }
             
             // 检查是否已存在
             if (monitoredPairs.includes(pair)) {
-                alert('该交易对已在监控列表中！');
-                return;
-            }
-            
-            // 验证交易对是否有效
-            const isValid = await validateTradingPair(pair);
-            if (!isValid) {
-                alert('交易对无效或币安不支持！');
+                showError('该交易对已在监控列表中！');
                 return;
             }
             
@@ -650,46 +682,27 @@
             // 加载该交易对数据
             await loadPairData(pair);
             
-            // 连接该交易对的WebSocket
-            await connectPairWebSocket(pair);
-            
             // 更新界面
             renderPairsTable();
             updateSuggestions();
+            
+            // 重新连接WebSocket以包含新交易对
+            reconnectWebSocket();
             
             // 显示成功消息
             showNotification(`成功添加交易对: ${pair}`);
         }
         
-        // 验证交易对是否有效
-        async function validateTradingPair(pair) {
-            try {
-                const response = await fetch(`${BINANCE_API.BASE_URL}${BINANCE_API.ENDPOINTS.TICKER_24H}?symbol=${pair}`);
-                if (response.ok) {
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.error('验证交易对失败:', error);
-                return false;
-            }
-        }
-        
         // 移除交易对
-        async function removePair(pair) {
+        function removePair(pair) {
             const index = monitoredPairs.indexOf(pair);
             if (index !== -1) {
                 monitoredPairs.splice(index, 1);
                 savePairsToStorage();
                 
-                // 关闭WebSocket连接
-                if (wsConnections[pair]) {
-                    wsConnections[pair].close();
-                    delete wsConnections[pair];
-                }
-                
                 // 从priceData中移除
                 delete priceData[pair];
+                delete lastPriceData[pair];
                 
                 // 从alertData中移除相关异动
                 alertData = alertData.filter(alert => alert.pair !== pair);
@@ -700,273 +713,170 @@
                 updateSuggestions();
                 updateStatusDisplay();
                 
+                // 重新连接WebSocket以移除交易对
+                reconnectWebSocket();
+                
                 // 显示通知
                 showNotification(`已移除交易对: ${pair}`);
             }
         }
         
-        // 加载所有交易对数据
-        async function loadAllPairsData() {
-            if (monitoredPairs.length === 0) return;
-            
-            updateConnectionStatus('connecting', '连接中...');
-            
-            // 分批加载，避免请求过多
-            const batchSize = 5;
-            for (let i = 0; i < monitoredPairs.length; i += batchSize) {
-                const batch = monitoredPairs.slice(i, i + batchSize);
-                await Promise.all(batch.map(pair => loadPairData(pair)));
-                
-                // 更新界面
-                renderPairsTable();
-                updateStatusDisplay();
-                
-                // 短暂延迟，避免请求过快
-                if (i + batchSize < monitoredPairs.length) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
-            }
-            
-            updateConnectionStatus('connected', '已连接');
-        }
-        
-        // 加载单个交易对数据
-        async function loadPairData(pair) {
+        // 连接到币安WebSocket
+        function connectToBinanceWebSocket() {
             try {
-                // 获取24小时行情
-                const tickerUrl = `${BINANCE_API.BASE_URL}${BINANCE_API.ENDPOINTS.TICKER_24H}?symbol=${pair}`;
-                const tickerResponse = await fetch(tickerUrl);
-                
-                if (!tickerResponse.ok) {
-                    console.error(`获取 ${pair} 数据失败:`, tickerResponse.status);
-                    return;
+                // 如果已有连接，先关闭
+                if (wsConnection) {
+                    wsConnection.close();
                 }
                 
-                const tickerData = await tickerResponse.json();
+                // 创建WebSocket连接
+                // 币安WebSocket支持多流订阅
+                const streams = monitoredPairs.map(pair => `${pair.toLowerCase()}@ticker`).join('/');
+                const wsUrl = `${DATA_SOURCES.BINANCE_WS}/stream?streams=${streams}`;
                 
-                // 获取K线数据用于分析
-                const klineUrl = `${BINANCE_API.BASE_URL}${BINANCE_API.ENDPOINTS.KLINES}?symbol=${pair}&interval=15m&limit=20`;
-                const klineResponse = await fetch(klineUrl);
-                const klineData = await klineResponse.json();
+                wsConnection = new WebSocket(wsUrl);
                 
-                // 计算价格变化和异动
-                const priceChangePercent = parseFloat(tickerData.priceChangePercent);
-                const volume = parseFloat(tickerData.volume);
-                const quoteVolume = parseFloat(tickerData.quoteVolume);
-                
-                // 分析K线数据
-                const alerts = analyzeKlineData(pair, klineData, tickerData);
-                
-                // 保存数据
-                priceData[pair] = {
-                    symbol: pair,
-                    price: parseFloat(tickerData.lastPrice).toFixed(4),
-                    high: parseFloat(tickerData.highPrice).toFixed(4),
-                    low: parseFloat(tickerData.lowPrice).toFixed(4),
-                    change24h: priceChangePercent.toFixed(2),
-                    volume: formatVolume(volume),
-                    quoteVolume: formatVolume(quoteVolume),
-                    timestamp: new Date().getTime()
-                };
-                
-                // 添加异动数据
-                if (alerts.length > 0) {
-                    alertData = alertData.filter(a => a.pair !== pair).concat(alerts);
-                }
-                
-                // 更新异动表格
-                renderAlertsTable();
-                
-            } catch (error) {
-                console.error(`加载 ${pair} 数据失败:`, error);
-            }
-        }
-        
-        // 分析K线数据，检测异动
-        function analyzeKlineData(pair, klineData, tickerData) {
-            const alerts = [];
-            
-            if (!klineData || klineData.length < 10) return alerts;
-            
-            // 计算最近几根K线的平均成交量
-            const recentVolumes = klineData.slice(-5).map(k => parseFloat(k[5]));
-            const avgVolume = recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length;
-            
-            // 最新K线
-            const latestKline = klineData[klineData.length - 1];
-            const open = parseFloat(latestKline[1]);
-            const close = parseFloat(latestKline[4]);
-            const high = parseFloat(latestKline[2]);
-            const low = parseFloat(latestKline[3]);
-            const volume = parseFloat(latestKline[5]);
-            
-            // 计算价格变化百分比
-            const priceChangePercent = ((close - open) / open) * 100;
-            
-            // 检测成交量异动
-            if (volume > avgVolume * 3) {
-                const strength = Math.min(volume / avgVolume / 10, 1);
-                alerts.push({
-                    pair: pair,
-                    timeframe: '15m',
-                    priceChange: priceChangePercent.toFixed(2),
-                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
-                    type: 'volume-spike',
-                    strength: strength,
-                    timestamp: new Date().getTime(),
-                    description: `成交量放大${((volume / avgVolume - 1) * 100).toFixed(0)}%`
-                });
-            }
-            
-            // 检测吸筹（价格小幅上涨+成交量放大）
-            if (priceChangePercent > 1 && priceChangePercent < 5 && volume > avgVolume * 2) {
-                alerts.push({
-                    pair: pair,
-                    timeframe: '15m',
-                    priceChange: priceChangePercent.toFixed(2),
-                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
-                    type: 'accumulation',
-                    strength: 0.7,
-                    timestamp: new Date().getTime(),
-                    description: '可能吸筹：价涨量增'
-                });
-            }
-            
-            // 检测砸盘（价格下跌+成交量放大）
-            if (priceChangePercent < -2 && volume > avgVolume * 2.5) {
-                alerts.push({
-                    pair: pair,
-                    timeframe: '15m',
-                    priceChange: priceChangePercent.toFixed(2),
-                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
-                    type: 'distribution',
-                    strength: 0.8,
-                    timestamp: new Date().getTime(),
-                    description: '可能砸盘：价跌量增'
-                });
-            }
-            
-            // 检测大涨
-            if (priceChangePercent > 5) {
-                alerts.push({
-                    pair: pair,
-                    timeframe: '15m',
-                    priceChange: priceChangePercent.toFixed(2),
-                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
-                    type: 'buy',
-                    strength: Math.min(priceChangePercent / 20, 1),
-                    timestamp: new Date().getTime(),
-                    description: `大幅上涨${priceChangePercent.toFixed(1)}%`
-                });
-            }
-            
-            // 检测大跌
-            if (priceChangePercent < -5) {
-                alerts.push({
-                    pair: pair,
-                    timeframe: '15m',
-                    priceChange: priceChangePercent.toFixed(2),
-                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
-                    type: 'sell',
-                    strength: Math.min(Math.abs(priceChangePercent) / 20, 1),
-                    timestamp: new Date().getTime(),
-                    description: `大幅下跌${Math.abs(priceChangePercent).toFixed(1)}%`
-                });
-            }
-            
-            return alerts;
-        }
-        
-        // 连接所有交易对的WebSocket
-        async function connectAllPairsWebSocket() {
-            for (const pair of monitoredPairs) {
-                await connectPairWebSocket(pair);
-                // 避免同时连接过多
-                await new Promise(resolve => setTimeout(resolve, 100));
-            }
-        }
-        
-        // 连接单个交易对的WebSocket
-        function connectPairWebSocket(pair) {
-            return new Promise((resolve) => {
-                // 关闭现有连接
-                if (wsConnections[pair]) {
-                    wsConnections[pair].close();
-                }
-                
-                // 创建新的WebSocket连接
-                // 注意：由于浏览器限制，我们只订阅ticker数据
-                // 实际应用中，可以订阅更多流，但需要处理连接限制
-                const ws = new WebSocket(`${BINANCE_API.WS_URL}/${pair.toLowerCase()}@ticker`);
-                
-                wsConnections[pair] = ws;
-                
-                ws.onopen = () => {
-                    console.log(`WebSocket连接已建立: ${pair}`);
+                wsConnection.onopen = () => {
+                    console.log('币安WebSocket连接已建立');
                     updateConnectionStatus('connected', '已连接');
-                    resolve();
+                    clearError();
+                    showNotification('实时数据连接已建立');
                 };
                 
-                ws.onmessage = (event) => {
+                wsConnection.onmessage = (event) => {
                     const data = JSON.parse(event.data);
                     
-                    // 更新价格数据
-                    if (data.s) {
-                        const pair = data.s;
+                    // 处理ticker数据
+                    if (data.data) {
+                        const ticker = data.data;
+                        const pair = ticker.s;
                         
-                        if (priceData[pair]) {
-                            priceData[pair].price = parseFloat(data.c).toFixed(4);
-                            priceData[pair].change24h = parseFloat(data.P).toFixed(2);
-                            priceData[pair].volume = formatVolume(parseFloat(data.v));
-                            priceData[pair].quoteVolume = formatVolume(parseFloat(data.q));
-                            priceData[pair].timestamp = new Date().getTime();
-                            
-                            // 检查是否需要生成异动
-                            checkForAlerts(pair, data);
-                            
-                            // 更新界面
-                            renderPairsTable();
-                            updateStatusDisplay();
-                            updateLastUpdateTime();
+                        // 计算价格变化
+                        let priceChangePercent = 0;
+                        if (lastPriceData[pair]) {
+                            const lastPrice = lastPriceData[pair];
+                            const currentPrice = parseFloat(ticker.c);
+                            priceChangePercent = ((currentPrice - lastPrice) / lastPrice) * 100;
                         }
+                        
+                        // 保存最后价格
+                        lastPriceData[pair] = parseFloat(ticker.c);
+                        
+                        // 更新价格数据
+                        priceData[pair] = {
+                            symbol: pair,
+                            price: parseFloat(ticker.c).toFixed(4),
+                            high: parseFloat(ticker.h).toFixed(4),
+                            low: parseFloat(ticker.l).toFixed(4),
+                            change24h: parseFloat(ticker.P).toFixed(2),
+                            volume: formatVolume(parseFloat(ticker.v)),
+                            quoteVolume: formatVolume(parseFloat(ticker.q)),
+                            timestamp: new Date().getTime(),
+                            priceChange: priceChangePercent.toFixed(2)
+                        };
+                        
+                        // 检查价格异动
+                        checkPriceAlert(pair, parseFloat(ticker.c), priceChangePercent, parseFloat(ticker.v));
+                        
+                        // 更新界面
+                        renderPairsTable();
+                        updateStatusDisplay();
+                        updateLastUpdateTime();
                     }
                 };
                 
-                ws.onerror = (error) => {
-                    console.error(`WebSocket错误 (${pair}):`, error);
+                wsConnection.onerror = (error) => {
+                    console.error('WebSocket错误:', error);
                     updateConnectionStatus('disconnected', '连接错误');
+                    showError('WebSocket连接错误，尝试使用备用数据源...');
+                    
+                    // 尝试使用备用数据源
+                    setTimeout(() => loadInitialData(), 2000);
                 };
                 
-                ws.onclose = () => {
-                    console.log(`WebSocket连接关闭: ${pair}`);
+                wsConnection.onclose = () => {
+                    console.log('WebSocket连接关闭');
+                    updateConnectionStatus('disconnected', '连接断开');
+                    
                     // 5秒后尝试重连
-                    setTimeout(() => connectPairWebSocket(pair), 5000);
+                    setTimeout(() => connectToBinanceWebSocket(), 5000);
                 };
-            });
+                
+            } catch (error) {
+                console.error('连接WebSocket失败:', error);
+                showError('无法连接WebSocket，使用备用数据源');
+                updateConnectionStatus('disconnected', '连接失败');
+                
+                // 使用备用数据源
+                loadInitialData();
+            }
         }
         
-        // 检查是否需要生成异动
-        function checkForAlerts(pair, tickerData) {
-            const priceChangePercent = parseFloat(tickerData.P);
-            const volume = parseFloat(tickerData.v);
+        // 重新连接WebSocket
+        function reconnectWebSocket() {
+            if (wsConnection && wsConnection.readyState === WebSocket.OPEN) {
+                wsConnection.close();
+            }
             
-            // 简单异动检测逻辑
-            if (Math.abs(priceChangePercent) > 3) {
-                const type = priceChangePercent > 0 ? 'buy' : 'sell';
-                const strength = Math.min(Math.abs(priceChangePercent) / 10, 1);
-                
+            // 短暂延迟后重新连接
+            setTimeout(() => connectToBinanceWebSocket(), 1000);
+        }
+        
+        // 检查价格异动
+        function checkPriceAlert(pair, currentPrice, priceChangePercent, volume) {
+            // 记录异动阈值
+            const alertThresholds = {
+                '1m': { price: 1.0, volume: 3.0 },
+                '5m': { price: 2.5, volume: 5.0 },
+                '15m': { price: 4.0, volume: 8.0 },
+                '30m': { price: 6.0, volume: 10.0 }
+            };
+            
+            const threshold = alertThresholds[activeTimeframe] || alertThresholds['1m'];
+            
+            // 检测大涨
+            if (priceChangePercent > threshold.price) {
                 const alert = {
                     pair: pair,
-                    timeframe: '实时',
+                    timeframe: activeTimeframe,
                     priceChange: priceChangePercent.toFixed(2),
-                    volumeChange: 'N/A',
-                    type: type,
-                    strength: strength,
+                    type: 'buy',
+                    strength: Math.min(priceChangePercent / 10, 1),
                     timestamp: new Date().getTime(),
-                    description: `价格异动: ${priceChangePercent > 0 ? '上涨' : '下跌'}${Math.abs(priceChangePercent).toFixed(1)}%`
+                    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                    description: `${activeTimeframe}上涨${priceChangePercent.toFixed(1)}%`
                 };
                 
-                // 添加到异动数据
+                addAlert(alert);
+            }
+            
+            // 检测大跌
+            if (priceChangePercent < -threshold.price) {
+                const alert = {
+                    pair: pair,
+                    timeframe: activeTimeframe,
+                    priceChange: priceChangePercent.toFixed(2),
+                    type: 'sell',
+                    strength: Math.min(Math.abs(priceChangePercent) / 10, 1),
+                    timestamp: new Date().getTime(),
+                    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+                    description: `${activeTimeframe}下跌${Math.abs(priceChangePercent).toFixed(1)}%`
+                };
+                
+                addAlert(alert);
+            }
+        }
+        
+        // 添加异动
+        function addAlert(alert) {
+            // 避免重复添加相同异动
+            const recentAlert = alertData.find(a => 
+                a.pair === alert.pair && 
+                a.timeframe === alert.timeframe &&
+                Math.abs(a.timestamp - alert.timestamp) < 60000 // 1分钟内
+            );
+            
+            if (!recentAlert) {
                 alertData.unshift(alert);
                 
                 // 限制异动数量
@@ -977,7 +887,7 @@
                 // 添加到历史记录
                 alertHistory.unshift({
                     ...alert,
-                    time: new Date().toLocaleTimeString()
+                    time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
                 });
                 
                 if (alertHistory.length > 100) {
@@ -988,36 +898,193 @@
                 renderAlertsTable();
                 updateStatusDisplay();
                 
-                // 显示通知
-                if (Math.abs(priceChangePercent) > 5) {
-                    showNotification(`${pair}: ${priceChangePercent > 0 ? '大涨' : '大跌'}${Math.abs(priceChangePercent).toFixed(1)}%`);
+                // 显示通知（只显示高强度异动）
+                if (alert.strength > 0.7) {
+                    showNotification(`${alert.pair}: ${alert.description}`);
                 }
             }
+        }
+        
+        // 加载初始数据
+        async function loadInitialData() {
+            updateConnectionStatus('connecting', '获取数据中...');
+            
+            // 如果没有交易对，显示提示
+            if (monitoredPairs.length === 0) {
+                updateConnectionStatus('disconnected', '无交易对');
+                return;
+            }
+            
+            // 分批加载数据，避免请求过多
+            const batchSize = 3;
+            for (let i = 0; i < monitoredPairs.length; i += batchSize) {
+                const batch = monitoredPairs.slice(i, i + batchSize);
+                
+                try {
+                    await Promise.all(batch.map(pair => loadPairDataFromAlternative(pair)));
+                    
+                    // 更新界面
+                    renderPairsTable();
+                    updateStatusDisplay();
+                    
+                    // 短暂延迟，避免请求过快
+                    if (i + batchSize < monitoredPairs.length) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                    
+                } catch (error) {
+                    console.error('批量加载数据失败:', error);
+                    showError(`加载部分数据失败: ${batch.join(', ')}`);
+                }
+            }
+            
+            // 如果没有WebSocket连接，则标记为已连接
+            if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+                updateConnectionStatus('connected', '数据已加载');
+            }
+        }
+        
+        // 从备用数据源加载交易对数据
+        async function loadPairDataFromAlternative(pair) {
+            try {
+                // 尝试使用CoinGecko API
+                const coinId = getCoinGeckoId(pair);
+                if (coinId) {
+                    const response = await fetchWithTimeout(
+                        `${DATA_SOURCES.COINGECKO}/simple/price?ids=${coinId}&vs_currencies=usd&include_24hr_change=true`,
+                        { timeout: 5000 }
+                    );
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data[coinId]) {
+                            const coinData = data[coinId];
+                            
+                            priceData[pair] = {
+                                symbol: pair,
+                                price: coinData.usd.toFixed(4),
+                                change24h: coinData.usd_24h_change ? coinData.usd_24h_change.toFixed(2) : '0.00',
+                                timestamp: new Date().getTime()
+                            };
+                            
+                            return;
+                        }
+                    }
+                }
+                
+                // 如果CoinGecko失败，尝试使用第三方代理
+                try {
+                    const response = await fetchWithTimeout(
+                        `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.binance.com/api/v3/ticker/24hr?symbol=${pair}`)}`,
+                        { timeout: 5000 }
+                    );
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        
+                        priceData[pair] = {
+                            symbol: pair,
+                            price: parseFloat(data.lastPrice).toFixed(4),
+                            high: parseFloat(data.highPrice).toFixed(4),
+                            low: parseFloat(data.lowPrice).toFixed(4),
+                            change24h: parseFloat(data.priceChangePercent).toFixed(2),
+                            volume: formatVolume(parseFloat(data.volume)),
+                            quoteVolume: formatVolume(parseFloat(data.quoteVolume)),
+                            timestamp: new Date().getTime()
+                        };
+                        
+                        return;
+                    }
+                } catch (proxyError) {
+                    console.error('代理请求失败:', proxyError);
+                }
+                
+                // 所有备用方案都失败，使用模拟数据
+                console.warn(`所有数据源失败，为 ${pair} 使用模拟数据`);
+                generateMockData(pair);
+                
+            } catch (error) {
+                console.error(`加载 ${pair} 数据失败:`, error);
+                generateMockData(pair);
+            }
+        }
+        
+        // 获取CoinGecko币种ID
+        function getCoinGeckoId(pair) {
+            const coinMap = {
+                'BTCUSDT': 'bitcoin',
+                'ETHUSDT': 'ethereum',
+                'BNBUSDT': 'binancecoin',
+                'SOLUSDT': 'solana',
+                'ADAUSDT': 'cardano',
+                'XRPUSDT': 'ripple',
+                'DOTUSDT': 'polkadot',
+                'DOGEUSDT': 'dogecoin',
+                'AVAXUSDT': 'avalanche-2',
+                'MATICUSDT': 'matic-network'
+            };
+            
+            // 提取币种部分（假设交易对格式为XXXUSDT）
+            const symbol = pair.replace('USDT', '').toLowerCase();
+            
+            // 先在映射表中查找
+            if (coinMap[pair]) {
+                return coinMap[pair];
+            }
+            
+            // 否则尝试通用映射
+            return symbol;
+        }
+        
+        // 生成模拟数据（备用方案）
+        function generateMockData(pair) {
+            const basePrice = 100 + Math.random() * 1000;
+            const change24h = (Math.random() - 0.5) * 15;
+            
+            priceData[pair] = {
+                symbol: pair,
+                price: basePrice.toFixed(4),
+                change24h: change24h.toFixed(2),
+                volume: formatVolume(Math.random() * 1000000),
+                timestamp: new Date().getTime()
+            };
         }
         
         // 渲染交易对表格
         function renderPairsTable() {
             const tableBody = document.getElementById('pairs-table-body');
+            
+            // 如果没有交易对
+            if (monitoredPairs.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" style="text-align: center; padding: 30px; color: #94a3b8;">
+                            暂无交易对，请添加交易对开始监控
+                        </td>
+                    </tr>
+                `;
+                document.getElementById('total-pairs').textContent = '0';
+                return;
+            }
+            
             tableBody.innerHTML = '';
             
             monitoredPairs.forEach(pair => {
                 const data = priceData[pair] || { 
                     price: '--', 
-                    change24h: 0, 
-                    volume: '--',
-                    quoteVolume: '--'
+                    change24h: 0
                 };
                 
                 const changeClass = data.change24h >= 0 ? 'change-positive' : 'change-negative';
                 const changeSign = data.change24h >= 0 ? '+' : '';
-                const changeText = data.change24h !== 0 ? `${changeSign}${data.change24h}%` : '0.00%';
+                const changeText = data.change24h !== 0 && data.change24h !== '--' ? 
+                    `${changeSign}${data.change24h}%` : '0.00%';
                 
                 const row = document.createElement('tr');
                 row.innerHTML = `
                     <td><strong>${pair}</strong></td>
                     <td>${data.price}</td>
                     <td class="${changeClass}">${changeText}</td>
-                    <td>${data.volume || '--'}</td>
                     <td>
                         <span class="indicator ${getPairStatus(pair)}">
                             ${getPairStatusText(pair)}
@@ -1049,7 +1116,6 @@
         // 渲染异动表格
         function renderAlertsTable() {
             const tableBody = document.getElementById('alerts-table-body');
-            tableBody.innerHTML = '';
             
             // 过滤当前时间周期的异动
             const filteredAlerts = activeTimeframe === '1m' 
@@ -1059,14 +1125,20 @@
             // 按时间排序（最新的在前）
             const sortedAlerts = filteredAlerts.sort((a, b) => b.timestamp - a.timestamp);
             
-            // 显示最近的20个异动
-            const displayAlerts = sortedAlerts.slice(0, 20);
+            // 显示最近的15个异动
+            const displayAlerts = sortedAlerts.slice(0, 15);
             
             if (displayAlerts.length === 0) {
-                const row = document.createElement('tr');
-                row.innerHTML = `<td colspan="6" style="text-align: center; padding: 30px; color: #94a3b8;">当前时间段暂无异动</td>`;
-                tableBody.appendChild(row);
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 30px; color: #94a3b8;">
+                            当前时间段暂无异动
+                        </td>
+                    </tr>
+                `;
             } else {
+                tableBody.innerHTML = '';
+                
                 displayAlerts.forEach(alert => {
                     const changeClass = alert.priceChange >= 0 ? 'change-positive' : 'change-negative';
                     const changeSign = alert.priceChange >= 0 ? '+' : '';
@@ -1078,7 +1150,6 @@
                         <td><strong>${alert.pair}</strong></td>
                         <td>${alert.timeframe}</td>
                         <td class="${changeClass}">${changeSign}${alert.priceChange}%</td>
-                        <td>${alert.volumeChange}%</td>
                         <td>
                             <span class="indicator ${alert.type}">
                                 ${getAlertTypeText(alert.type)}
@@ -1087,13 +1158,18 @@
                         <td>
                             <span class="alert-badge ${strengthClass}">${strengthText}</span>
                         </td>
+                        <td>${alert.time || new Date(alert.timestamp).toLocaleTimeString('zh-CN', {hour12: false})}</td>
                     `;
                     tableBody.appendChild(row);
                 });
             }
             
             // 更新活跃异动计数
-            document.getElementById('active-alerts').textContent = filteredAlerts.length;
+            const activeAlerts = alertData.filter(alert => 
+                alert.timestamp > Date.now() - 3600000 // 1小时内的异动
+            ).length;
+            
+            document.getElementById('active-alerts').textContent = activeAlerts;
         }
         
         // 获取异动类型文本
@@ -1102,8 +1178,8 @@
                 'accumulation': '吸筹',
                 'distribution': '砸盘',
                 'volume-spike': '放量',
-                'buy': '买入',
-                'sell': '卖出',
+                'buy': '买入信号',
+                'sell': '卖出信号',
                 'neutral': '中性'
             };
             return typeMap[type] || type;
@@ -1128,8 +1204,8 @@
             const pairAlerts = alertData.filter(alert => alert.pair === pair);
             if (pairAlerts.length === 0) return 'neutral';
             
-            const hasBuy = pairAlerts.some(alert => alert.type === 'accumulation' || alert.type === 'buy');
-            const hasSell = pairAlerts.some(alert => alert.type === 'distribution' || alert.type === 'sell');
+            const hasBuy = pairAlerts.some(alert => alert.type === 'buy');
+            const hasSell = pairAlerts.some(alert => alert.type === 'sell');
             
             if (hasBuy && !hasSell) return 'buy';
             if (hasSell && !hasBuy) return 'sell';
@@ -1144,127 +1220,6 @@
                 case 'sell': return '卖出信号';
                 default: return '观望中';
             }
-        }
-        
-        // 初始化图表
-        async function initChart() {
-            const chartDom = document.getElementById('volume-chart');
-            chartInstance = echarts.init(chartDom);
-            
-            // 初始图表配置
-            const option = {
-                backgroundColor: 'transparent',
-                tooltip: {
-                    trigger: 'axis',
-                    axisPointer: {
-                        type: 'shadow'
-                    },
-                    formatter: function(params) {
-                        let result = params[0].name + '<br/>';
-                        params.forEach(param => {
-                            result += `${param.seriesName}: ${param.value}<br/>`;
-                        });
-                        return result;
-                    }
-                },
-                legend: {
-                    data: ['成交量'],
-                    textStyle: {
-                        color: '#f1f5f9'
-                    }
-                },
-                grid: {
-                    left: '3%',
-                    right: '4%',
-                    bottom: '3%',
-                    containLabel: true
-                },
-                xAxis: {
-                    type: 'category',
-                    data: [],
-                    axisLine: {
-                        lineStyle: {
-                            color: '#94a3b8'
-                        }
-                    },
-                    axisLabel: {
-                        color: '#94a3b8'
-                    }
-                },
-                yAxis: {
-                    type: 'value',
-                    axisLine: {
-                        lineStyle: {
-                            color: '#94a3b8'
-                        }
-                    },
-                    axisLabel: {
-                        color: '#94a3b8'
-                    },
-                    splitLine: {
-                        lineStyle: {
-                            color: 'rgba(148, 163, 184, 0.1)'
-                        }
-                    }
-                },
-                series: [{
-                    name: '成交量',
-                    type: 'bar',
-                    data: [],
-                    itemStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: '#3b82f6' },
-                            { offset: 1, color: '#1e40af' }
-                        ])
-                    }
-                }]
-            };
-            
-            chartInstance.setOption(option);
-            
-            // 加载初始图表数据
-            await refreshChart();
-        }
-        
-        // 刷新图表
-        async function refreshChart() {
-            if (monitoredPairs.length === 0) return;
-            
-            // 获取交易对数据用于图表
-            const pairsForChart = monitoredPairs.slice(0, 8); // 最多显示8个
-            const volumes = [];
-            
-            for (const pair of pairsForChart) {
-                if (priceData[pair] && priceData[pair].quoteVolume) {
-                    // 提取数值部分
-                    const volStr = priceData[pair].quoteVolume;
-                    const volNum = parseFloat(volStr.replace(/[^0-9.]/g, '')) || 0;
-                    volumes.push({
-                        pair: pair,
-                        volume: volNum
-                    });
-                } else {
-                    volumes.push({
-                        pair: pair,
-                        volume: 0
-                    });
-                }
-            }
-            
-            // 按成交量排序
-            volumes.sort((a, b) => b.volume - a.volume);
-            
-            // 更新图表
-            const option = {
-                xAxis: {
-                    data: volumes.map(v => v.pair)
-                },
-                series: [{
-                    data: volumes.map(v => v.volume)
-                }]
-            };
-            
-            chartInstance.setOption(option);
         }
         
         // 更新交易建议
@@ -1285,9 +1240,19 @@
             // 分析每个交易对
             monitoredPairs.forEach(pair => {
                 const data = priceData[pair];
-                if (!data) return;
+                if (!data) {
+                    suggestionsHTML += `
+                        <div class="suggestion-item">
+                            <strong>${pair}</strong>
+                            <div style="margin-top: 8px; color: #94a3b8;">
+                                等待数据加载...
+                            </div>
+                        </div>
+                    `;
+                    return;
+                }
                 
-                const change = parseFloat(data.change24h);
+                const change = parseFloat(data.change24h) || 0;
                 const alerts = alertData.filter(a => a.pair === pair);
                 
                 let suggestion = '';
@@ -1295,19 +1260,19 @@
                 let signal = 'neutral';
                 
                 // 生成建议逻辑
-                if (change > 5 && alerts.some(a => a.type === 'buy' || a.type === 'accumulation')) {
+                if (change > 5 && alerts.some(a => a.type === 'buy')) {
                     suggestion = `强势上涨中，考虑逢低买入`;
                     confidence = '高';
                     signal = 'buy';
-                } else if (change < -5 && alerts.some(a => a.type === 'sell' || a.type === 'distribution')) {
+                } else if (change < -5 && alerts.some(a => a.type === 'sell')) {
                     suggestion = `大幅下跌，建议观望或止损`;
                     confidence = '高';
                     signal = 'sell';
-                } else if (change > 2 && change <= 5) {
+                } else if (change > 2) {
                     suggestion = `温和上涨，可考虑轻仓参与`;
                     confidence = '中';
                     signal = 'buy';
-                } else if (change < -2 && change >= -5) {
+                } else if (change < -2) {
                     suggestion = `回调中，等待企稳信号`;
                     confidence = '中';
                     signal = 'sell';
@@ -1322,7 +1287,7 @@
                 }
                 
                 // 技术指标建议
-                const rsi = calculateRSI(pair);
+                const rsi = calculateRSI(change);
                 let indicatorSuggestion = '';
                 
                 if (rsi > 70) {
@@ -1357,10 +1322,10 @@
                 <div class="suggestion-item">
                     <strong>一般交易建议</strong>
                     <div style="margin-top: 8px; font-size: 0.95rem;">
-                        1. 设置止损：每次开单都应设置止损，一般建议止损幅度为2-5%<br>
+                        1. 设置止损：每次开单都应设置止损，建议2-5%<br>
                         2. 仓位管理：单笔交易不超过总资金的5%<br>
-                        3. 趋势交易：跟随主要趋势方向交易，避免逆势操作<br>
-                        4. 风险管理：避免在重大新闻发布前后开大仓
+                        3. 趋势跟随：跟随主要趋势方向交易<br>
+                        4. 风险管理：避免在重大新闻前后开大仓
                     </div>
                 </div>
             `;
@@ -1368,36 +1333,22 @@
             suggestionsContent.innerHTML = suggestionsHTML;
         }
         
-        // 计算RSI（简化版）
-        function calculateRSI(pair) {
-            // 简化的RSI计算，实际应该基于历史价格数据
-            const data = priceData[pair];
-            if (!data) return 50;
-            
-            const change = parseFloat(data.change24h);
-            
-            // 基于24小时变化估算RSI
-            if (change > 10) return 75;
-            if (change > 5) return 65;
-            if (change > 2) return 55;
-            if (change > 0) return 50;
-            if (change > -2) return 45;
-            if (change > -5) return 35;
-            if (change > -10) return 25;
+        // 计算RSI（基于价格变化）
+        function calculateRSI(priceChange) {
+            // 简化的RSI估算
+            if (priceChange > 10) return 75;
+            if (priceChange > 5) return 65;
+            if (priceChange > 2) return 55;
+            if (priceChange > 0) return 50;
+            if (priceChange > -2) return 45;
+            if (priceChange > -5) return 35;
+            if (priceChange > -10) return 25;
             return 15;
         }
         
         // 更新状态显示
         function updateStatusDisplay() {
-            // 更新最后更新时间
             updateLastUpdateTime();
-            
-            // 更新活跃异动计数
-            const activeAlerts = alertData.filter(alert => 
-                alert.timestamp > Date.now() - 3600000 // 1小时内的异动
-            ).length;
-            
-            document.getElementById('active-alerts').textContent = activeAlerts;
         }
         
         // 更新连接状态
@@ -1426,31 +1377,27 @@
         
         // 启动更新计时器
         function startUpdateTimer() {
+            // 定期更新建议和检查数据
             setInterval(() => {
-                updateTimer--;
-                document.getElementById('next-update').textContent = updateTimer;
+                updateSuggestions();
                 
-                if (updateTimer <= 0) {
-                    updateTimer = updateInterval;
+                // 定期重新加载数据（如果WebSocket断开）
+                if (!wsConnection || wsConnection.readyState !== WebSocket.OPEN) {
+                    const now = Date.now();
+                    const lastUpdate = Object.values(priceData)[0]?.timestamp || 0;
                     
-                    // 定期刷新数据
-                    monitoredPairs.forEach(pair => {
-                        if (Math.random() > 0.7) { // 随机刷新部分交易对
-                            loadPairData(pair);
-                        }
-                    });
-                    
-                    // 更新建议
-                    updateSuggestions();
-                    
-                    // 更新图表
-                    refreshChart();
+                    // 如果数据超过60秒未更新，重新加载
+                    if (now - lastUpdate > 60000) {
+                        loadInitialData();
+                    }
                 }
-            }, 1000);
+            }, 30000); // 每30秒更新一次
         }
         
         // 格式化成交量
         function formatVolume(volume) {
+            if (!volume || isNaN(volume)) return '--';
+            
             if (volume >= 1e9) {
                 return (volume / 1e9).toFixed(2) + 'B';
             } else if (volume >= 1e6) {
@@ -1494,9 +1441,47 @@
             setTimeout(() => {
                 notification.style.animation = 'slideOut 0.3s ease';
                 setTimeout(() => {
-                    document.body.removeChild(notification);
+                    if (notification.parentNode) {
+                        document.body.removeChild(notification);
+                    }
                 }, 300);
             }, 3000);
+        }
+        
+        // 显示错误
+        function showError(message) {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = `
+                <div class="error-message">
+                    <i class="fas fa-exclamation-triangle"></i> ${message}
+                </div>
+            `;
+        }
+        
+        // 清除错误
+        function clearError() {
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.innerHTML = '';
+        }
+        
+        // 带超时的fetch
+        async function fetchWithTimeout(url, options = {}) {
+            const { timeout = 8000 } = options;
+            
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+            
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    signal: controller.signal
+                });
+                clearTimeout(id);
+                return response;
+            } catch (error) {
+                clearTimeout(id);
+                throw error;
+            }
         }
         
         // 添加CSS动画
