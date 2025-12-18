@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>币安实时异动监控系统</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #1e3a8a;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --info-color: #3b82f6;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f1f5f9;
+            --border-color: #334155;
+            --table-header: #475569;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .subtitle {
+            color: #94a3b8;
+            font-size: 1.1rem;
+        }
+        
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .status-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .status-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        .status-label {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .pair-management {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 14px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: var(--text-color);
+            font-size: 1rem;
+        }
+        
+        button {
+            padding: 14px 25px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+        
+        .btn-danger {
+            background: var(--danger-color);
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+        }
+        
+        .btn-warning {
+            background: var(--warning-color);
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        th {
+            background: var(--table-header);
+            padding: 18px 15px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid var(--border-color);
+        }
+        
+        td {
+            padding: 18px 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        tr:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .change-positive {
+            color: var(--success-color);
+            font-weight: bold;
+        }
+        
+        .change-negative {
+            color: var(--danger-color);
+            font-weight: bold;
+        }
+        
+        .indicator {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .indicator.buy {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success-color);
+        }
+        
+        .indicator.sell {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger-color);
+        }
+        
+        .indicator.neutral {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--info-color);
+        }
+        
+        .indicator.accumulation {
+            background: rgba(16, 185, 129, 0.3);
+            color: var(--success-color);
+        }
+        
+        .indicator.distribution {
+            background: rgba(239, 68, 68, 0.3);
+            color: var(--danger-color);
+        }
+        
+        .indicator.volume-spike {
+            background: rgba(245, 158, 11, 0.3);
+            color: var(--warning-color);
+        }
+        
+        .timeframe-tabs {
+            display: flex;
+            margin-bottom: 25px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .timeframe-tab {
+            padding: 12px 25px;
+            cursor: pointer;
+            font-weight: 600;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+        
+        .timeframe-tab.active {
+            border-bottom-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .chart-container {
+            height: 350px;
+            margin-top: 20px;
+        }
+        
+        .suggestion-card {
+            background: linear-gradient(135deg, rgba(30, 58, 138, 0.3), rgba(30, 58, 138, 0.1));
+            border-left: 5px solid var(--primary-color);
+        }
+        
+        .suggestion-content {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+        
+        .suggestion-item {
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px dashed var(--border-color);
+        }
+        
+        .suggestion-item:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        
+        .last-update {
+            text-align: center;
+            color: #94a3b8;
+            margin-top: 30px;
+            font-size: 0.9rem;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .action-btn {
+            padding: 8px 15px;
+            font-size: 0.9rem;
+        }
+        
+        .pair-list {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        
+        .websocket-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        
+        .websocket-status.connected {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success-color);
+        }
+        
+        .websocket-status.connecting {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning-color);
+        }
+        
+        .websocket-status.disconnected {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger-color);
+        }
+        
+        .alert-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            margin-left: 8px;
+            font-weight: 600;
+        }
+        
+        .alert-badge.high {
+            background: rgba(239, 68, 68, 0.3);
+            color: var(--danger-color);
+        }
+        
+        .alert-badge.medium {
+            background: rgba(245, 158, 11, 0.3);
+            color: var(--warning-color);
+        }
+        
+        .alert-badge.low {
+            background: rgba(59, 130, 246, 0.3);
+            color: var(--info-color);
+        }
+        
+        @media (max-width: 1200px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .pair-management {
+                flex-direction: column;
+            }
+            
+            .status-bar {
+                flex-wrap: wrap;
+                gap: 20px;
+            }
+            
+            .timeframe-tabs {
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-chart-line"></i> 币安实时异动监控系统</h1>
+            <p class="subtitle">真实数据 | 多周期监控 | WebSocket实时更新 | 支持自定义交易对</p>
+        </header>
+        
+        <div class="status-bar">
+            <div class="status-item">
+                <span class="status-label">监控交易对</span>
+                <span class="status-value" id="total-pairs">0</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">活跃异动</span>
+                <span class="status-value" id="active-alerts">0</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">连接状态</span>
+                <span class="websocket-status disconnected" id="connection-status">
+                    <i class="fas fa-plug"></i> 未连接
+                </span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">最后更新</span>
+                <span class="status-value" id="last-update-time">--:--:--</span>
+            </div>
+        </div>
+        
+        <div class="grid">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-coins"></i> 交易对管理</h2>
+                </div>
+                
+                <div class="pair-management">
+                    <input type="text" id="pair-input" placeholder="输入交易对 (如: BTCUSDT, ETHUSDT)">
+                    <button id="add-pair-btn" class="btn-success"><i class="fas fa-plus"></i> 添加</button>
+                    <button id="reset-pairs-btn" class="btn-warning"><i class="fas fa-redo"></i> 重置</button>
+                </div>
+                
+                <div class="pair-list">
+                    <table id="pairs-table">
+                        <thead>
+                            <tr>
+                                <th>交易对</th>
+                                <th>当前价格</th>
+                                <th>24h变化</th>
+                                <th>成交量(24h)</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pairs-table-body">
+                            <!-- 动态生成交易对行 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-bell"></i> 实时异动监控</h2>
+                    <div class="timeframe-tabs">
+                        <div class="timeframe-tab active" data-timeframe="1m">1分钟</div>
+                        <div class="timeframe-tab" data-timeframe="5m">5分钟</div>
+                        <div class="timeframe-tab" data-timeframe="15m">15分钟</div>
+                        <div class="timeframe-tab" data-timeframe="30m">30分钟</div>
+                    </div>
+                </div>
+                
+                <div id="alerts-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>交易对</th>
+                                <th>周期</th>
+                                <th>价格变化</th>
+                                <th>成交量变化</th>
+                                <th>异动类型</th>
+                                <th>强度</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alerts-table-body">
+                            <!-- 动态生成异动行 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-chart-bar"></i> 成交量分析</h2>
+                    <div class="action-buttons">
+                        <button id="refresh-chart-btn" class="action-btn"><i class="fas fa-sync-alt"></i> 刷新图表</button>
+                    </div>
+                </div>
+                
+                <div class="chart-container" id="volume-chart"></div>
+            </div>
+            
+            <div class="card suggestion-card">
+                <div class="card-header">
+                    <h2 class="card-title"><i class="fas fa-lightbulb"></i> 交易建议与信号</h2>
+                    <div class="action-buttons">
+                        <button id="refresh-suggestions-btn" class="action-btn"><i class="fas fa-sync-alt"></i> 刷新建议</button>
+                    </div>
+                </div>
+                
+                <div class="suggestion-content" id="suggestions-content">
+                    <div class="suggestion-item">
+                        <strong>系统启动中...</strong> 正在连接币安API获取实时数据。
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="last-update">
+            <p>数据来源：币安官方API | 系统自动更新 | 下次更新：<span id="next-update">60</span>秒</p>
+            <p style="margin-top: 10px; font-size: 0.8rem;">
+                <i class="fas fa-info-circle"></i> 提示：系统使用真实币安API数据，所有价格和异动均为实时信息
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let monitoredPairs = [];
+        let priceData = {};
+        let alertData = [];
+        let activeTimeframe = '1m';
+        let updateInterval = 30; // 更新间隔（秒）
+        let updateTimer = updateInterval;
+        let wsConnections = {};
+        let chartInstance = null;
+        let alertHistory = [];
+        
+        // 币安API配置
+        const BINANCE_API = {
+            BASE_URL: 'https://api.binance.com',
+            WS_URL: 'wss://stream.binance.com:9443/ws',
+            ENDPOINTS: {
+                TICKER_24H: '/api/v3/ticker/24hr',
+                KLINES: '/api/v3/klines',
+                DEPTH: '/api/v3/depth',
+                EXCHANGE_INFO: '/api/v3/exchangeInfo'
+            }
+        };
+        
+        // 从localStorage加载交易对
+        function loadPairsFromStorage() {
+            const savedPairs = localStorage.getItem('binanceRealPairs');
+            if (savedPairs) {
+                monitoredPairs = JSON.parse(savedPairs);
+            } else {
+                // 默认交易对
+                monitoredPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'XRPUSDT'];
+                savePairsToStorage();
+            }
+        }
+        
+        // 保存交易对到localStorage
+        function savePairsToStorage() {
+            localStorage.setItem('binanceRealPairs', JSON.stringify(monitoredPairs));
+        }
+        
+        // 初始化页面
+        async function initPage() {
+            loadPairsFromStorage();
+            setupEventListeners();
+            setupTimeframeTabs();
+            await initChart();
+            updateStatusDisplay();
+            
+            // 连接所有交易对的WebSocket
+            await connectAllPairsWebSocket();
+            
+            // 初始数据加载
+            await loadAllPairsData();
+            
+            // 启动更新计时器
+            startUpdateTimer();
+            
+            // 初始建议
+            updateSuggestions();
+        }
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 添加交易对按钮
+            document.getElementById('add-pair-btn').addEventListener('click', addNewPair);
+            
+            // 输入框回车键添加
+            document.getElementById('pair-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addNewPair();
+                }
+            });
+            
+            // 重置交易对按钮
+            document.getElementById('reset-pairs-btn').addEventListener('click', function() {
+                if (confirm('确定要重置为默认交易对吗？')) {
+                    monitoredPairs = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ADAUSDT', 'XRPUSDT'];
+                    savePairsToStorage();
+                    location.reload();
+                }
+            });
+            
+            // 刷新图表按钮
+            document.getElementById('refresh-chart-btn').addEventListener('click', refreshChart);
+            
+            // 刷新建议按钮
+            document.getElementById('refresh-suggestions-btn').addEventListener('click', updateSuggestions);
+        }
+        
+        // 设置时间周期标签页
+        function setupTimeframeTabs() {
+            document.querySelectorAll('.timeframe-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    // 移除所有active类
+                    document.querySelectorAll('.timeframe-tab').forEach(t => {
+                        t.classList.remove('active');
+                    });
+                    
+                    // 为当前标签添加active类
+                    this.classList.add('active');
+                    activeTimeframe = this.getAttribute('data-timeframe');
+                    
+                    // 更新异动表格
+                    renderAlertsTable();
+                });
+            });
+        }
+        
+        // 添加新交易对
+        async function addNewPair() {
+            const input = document.getElementById('pair-input');
+            const pair = input.value.trim().toUpperCase().replace('/', '');
+            
+            if (!pair) {
+                alert('请输入交易对！');
+                return;
+            }
+            
+            // 验证交易对格式
+            if (!/^[A-Z]{3,10}[A-Z]{3,10}$/.test(pair)) {
+                alert('交易对格式不正确！请使用类似 BTCUSDT 的格式。');
+                return;
+            }
+            
+            // 检查是否已存在
+            if (monitoredPairs.includes(pair)) {
+                alert('该交易对已在监控列表中！');
+                return;
+            }
+            
+            // 验证交易对是否有效
+            const isValid = await validateTradingPair(pair);
+            if (!isValid) {
+                alert('交易对无效或币安不支持！');
+                return;
+            }
+            
+            // 添加到监控列表
+            monitoredPairs.push(pair);
+            savePairsToStorage();
+            
+            // 清空输入框
+            input.value = '';
+            
+            // 加载该交易对数据
+            await loadPairData(pair);
+            
+            // 连接该交易对的WebSocket
+            await connectPairWebSocket(pair);
+            
+            // 更新界面
+            renderPairsTable();
+            updateSuggestions();
+            
+            // 显示成功消息
+            showNotification(`成功添加交易对: ${pair}`);
+        }
+        
+        // 验证交易对是否有效
+        async function validateTradingPair(pair) {
+            try {
+                const response = await fetch(`${BINANCE_API.BASE_URL}${BINANCE_API.ENDPOINTS.TICKER_24H}?symbol=${pair}`);
+                if (response.ok) {
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('验证交易对失败:', error);
+                return false;
+            }
+        }
+        
+        // 移除交易对
+        async function removePair(pair) {
+            const index = monitoredPairs.indexOf(pair);
+            if (index !== -1) {
+                monitoredPairs.splice(index, 1);
+                savePairsToStorage();
+                
+                // 关闭WebSocket连接
+                if (wsConnections[pair]) {
+                    wsConnections[pair].close();
+                    delete wsConnections[pair];
+                }
+                
+                // 从priceData中移除
+                delete priceData[pair];
+                
+                // 从alertData中移除相关异动
+                alertData = alertData.filter(alert => alert.pair !== pair);
+                
+                // 更新界面
+                renderPairsTable();
+                renderAlertsTable();
+                updateSuggestions();
+                updateStatusDisplay();
+                
+                // 显示通知
+                showNotification(`已移除交易对: ${pair}`);
+            }
+        }
+        
+        // 加载所有交易对数据
+        async function loadAllPairsData() {
+            if (monitoredPairs.length === 0) return;
+            
+            updateConnectionStatus('connecting', '连接中...');
+            
+            // 分批加载，避免请求过多
+            const batchSize = 5;
+            for (let i = 0; i < monitoredPairs.length; i += batchSize) {
+                const batch = monitoredPairs.slice(i, i + batchSize);
+                await Promise.all(batch.map(pair => loadPairData(pair)));
+                
+                // 更新界面
+                renderPairsTable();
+                updateStatusDisplay();
+                
+                // 短暂延迟，避免请求过快
+                if (i + batchSize < monitoredPairs.length) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+            
+            updateConnectionStatus('connected', '已连接');
+        }
+        
+        // 加载单个交易对数据
+        async function loadPairData(pair) {
+            try {
+                // 获取24小时行情
+                const tickerUrl = `${BINANCE_API.BASE_URL}${BINANCE_API.ENDPOINTS.TICKER_24H}?symbol=${pair}`;
+                const tickerResponse = await fetch(tickerUrl);
+                
+                if (!tickerResponse.ok) {
+                    console.error(`获取 ${pair} 数据失败:`, tickerResponse.status);
+                    return;
+                }
+                
+                const tickerData = await tickerResponse.json();
+                
+                // 获取K线数据用于分析
+                const klineUrl = `${BINANCE_API.BASE_URL}${BINANCE_API.ENDPOINTS.KLINES}?symbol=${pair}&interval=15m&limit=20`;
+                const klineResponse = await fetch(klineUrl);
+                const klineData = await klineResponse.json();
+                
+                // 计算价格变化和异动
+                const priceChangePercent = parseFloat(tickerData.priceChangePercent);
+                const volume = parseFloat(tickerData.volume);
+                const quoteVolume = parseFloat(tickerData.quoteVolume);
+                
+                // 分析K线数据
+                const alerts = analyzeKlineData(pair, klineData, tickerData);
+                
+                // 保存数据
+                priceData[pair] = {
+                    symbol: pair,
+                    price: parseFloat(tickerData.lastPrice).toFixed(4),
+                    high: parseFloat(tickerData.highPrice).toFixed(4),
+                    low: parseFloat(tickerData.lowPrice).toFixed(4),
+                    change24h: priceChangePercent.toFixed(2),
+                    volume: formatVolume(volume),
+                    quoteVolume: formatVolume(quoteVolume),
+                    timestamp: new Date().getTime()
+                };
+                
+                // 添加异动数据
+                if (alerts.length > 0) {
+                    alertData = alertData.filter(a => a.pair !== pair).concat(alerts);
+                }
+                
+                // 更新异动表格
+                renderAlertsTable();
+                
+            } catch (error) {
+                console.error(`加载 ${pair} 数据失败:`, error);
+            }
+        }
+        
+        // 分析K线数据，检测异动
+        function analyzeKlineData(pair, klineData, tickerData) {
+            const alerts = [];
+            
+            if (!klineData || klineData.length < 10) return alerts;
+            
+            // 计算最近几根K线的平均成交量
+            const recentVolumes = klineData.slice(-5).map(k => parseFloat(k[5]));
+            const avgVolume = recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length;
+            
+            // 最新K线
+            const latestKline = klineData[klineData.length - 1];
+            const open = parseFloat(latestKline[1]);
+            const close = parseFloat(latestKline[4]);
+            const high = parseFloat(latestKline[2]);
+            const low = parseFloat(latestKline[3]);
+            const volume = parseFloat(latestKline[5]);
+            
+            // 计算价格变化百分比
+            const priceChangePercent = ((close - open) / open) * 100;
+            
+            // 检测成交量异动
+            if (volume > avgVolume * 3) {
+                const strength = Math.min(volume / avgVolume / 10, 1);
+                alerts.push({
+                    pair: pair,
+                    timeframe: '15m',
+                    priceChange: priceChangePercent.toFixed(2),
+                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
+                    type: 'volume-spike',
+                    strength: strength,
+                    timestamp: new Date().getTime(),
+                    description: `成交量放大${((volume / avgVolume - 1) * 100).toFixed(0)}%`
+                });
+            }
+            
+            // 检测吸筹（价格小幅上涨+成交量放大）
+            if (priceChangePercent > 1 && priceChangePercent < 5 && volume > avgVolume * 2) {
+                alerts.push({
+                    pair: pair,
+                    timeframe: '15m',
+                    priceChange: priceChangePercent.toFixed(2),
+                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
+                    type: 'accumulation',
+                    strength: 0.7,
+                    timestamp: new Date().getTime(),
+                    description: '可能吸筹：价涨量增'
+                });
+            }
+            
+            // 检测砸盘（价格下跌+成交量放大）
+            if (priceChangePercent < -2 && volume > avgVolume * 2.5) {
+                alerts.push({
+                    pair: pair,
+                    timeframe: '15m',
+                    priceChange: priceChangePercent.toFixed(2),
+                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
+                    type: 'distribution',
+                    strength: 0.8,
+                    timestamp: new Date().getTime(),
+                    description: '可能砸盘：价跌量增'
+                });
+            }
+            
+            // 检测大涨
+            if (priceChangePercent > 5) {
+                alerts.push({
+                    pair: pair,
+                    timeframe: '15m',
+                    priceChange: priceChangePercent.toFixed(2),
+                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
+                    type: 'buy',
+                    strength: Math.min(priceChangePercent / 20, 1),
+                    timestamp: new Date().getTime(),
+                    description: `大幅上涨${priceChangePercent.toFixed(1)}%`
+                });
+            }
+            
+            // 检测大跌
+            if (priceChangePercent < -5) {
+                alerts.push({
+                    pair: pair,
+                    timeframe: '15m',
+                    priceChange: priceChangePercent.toFixed(2),
+                    volumeChange: ((volume / avgVolume - 1) * 100).toFixed(0),
+                    type: 'sell',
+                    strength: Math.min(Math.abs(priceChangePercent) / 20, 1),
+                    timestamp: new Date().getTime(),
+                    description: `大幅下跌${Math.abs(priceChangePercent).toFixed(1)}%`
+                });
+            }
+            
+            return alerts;
+        }
+        
+        // 连接所有交易对的WebSocket
+        async function connectAllPairsWebSocket() {
+            for (const pair of monitoredPairs) {
+                await connectPairWebSocket(pair);
+                // 避免同时连接过多
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+        }
+        
+        // 连接单个交易对的WebSocket
+        function connectPairWebSocket(pair) {
+            return new Promise((resolve) => {
+                // 关闭现有连接
+                if (wsConnections[pair]) {
+                    wsConnections[pair].close();
+                }
+                
+                // 创建新的WebSocket连接
+                // 注意：由于浏览器限制，我们只订阅ticker数据
+                // 实际应用中，可以订阅更多流，但需要处理连接限制
+                const ws = new WebSocket(`${BINANCE_API.WS_URL}/${pair.toLowerCase()}@ticker`);
+                
+                wsConnections[pair] = ws;
+                
+                ws.onopen = () => {
+                    console.log(`WebSocket连接已建立: ${pair}`);
+                    updateConnectionStatus('connected', '已连接');
+                    resolve();
+                };
+                
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    // 更新价格数据
+                    if (data.s) {
+                        const pair = data.s;
+                        
+                        if (priceData[pair]) {
+                            priceData[pair].price = parseFloat(data.c).toFixed(4);
+                            priceData[pair].change24h = parseFloat(data.P).toFixed(2);
+                            priceData[pair].volume = formatVolume(parseFloat(data.v));
+                            priceData[pair].quoteVolume = formatVolume(parseFloat(data.q));
+                            priceData[pair].timestamp = new Date().getTime();
+                            
+                            // 检查是否需要生成异动
+                            checkForAlerts(pair, data);
+                            
+                            // 更新界面
+                            renderPairsTable();
+                            updateStatusDisplay();
+                            updateLastUpdateTime();
+                        }
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    console.error(`WebSocket错误 (${pair}):`, error);
+                    updateConnectionStatus('disconnected', '连接错误');
+                };
+                
+                ws.onclose = () => {
+                    console.log(`WebSocket连接关闭: ${pair}`);
+                    // 5秒后尝试重连
+                    setTimeout(() => connectPairWebSocket(pair), 5000);
+                };
+            });
+        }
+        
+        // 检查是否需要生成异动
+        function checkForAlerts(pair, tickerData) {
+            const priceChangePercent = parseFloat(tickerData.P);
+            const volume = parseFloat(tickerData.v);
+            
+            // 简单异动检测逻辑
+            if (Math.abs(priceChangePercent) > 3) {
+                const type = priceChangePercent > 0 ? 'buy' : 'sell';
+                const strength = Math.min(Math.abs(priceChangePercent) / 10, 1);
+                
+                const alert = {
+                    pair: pair,
+                    timeframe: '实时',
+                    priceChange: priceChangePercent.toFixed(2),
+                    volumeChange: 'N/A',
+                    type: type,
+                    strength: strength,
+                    timestamp: new Date().getTime(),
+                    description: `价格异动: ${priceChangePercent > 0 ? '上涨' : '下跌'}${Math.abs(priceChangePercent).toFixed(1)}%`
+                };
+                
+                // 添加到异动数据
+                alertData.unshift(alert);
+                
+                // 限制异动数量
+                if (alertData.length > 50) {
+                    alertData = alertData.slice(0, 50);
+                }
+                
+                // 添加到历史记录
+                alertHistory.unshift({
+                    ...alert,
+                    time: new Date().toLocaleTimeString()
+                });
+                
+                if (alertHistory.length > 100) {
+                    alertHistory = alertHistory.slice(0, 100);
+                }
+                
+                // 更新界面
+                renderAlertsTable();
+                updateStatusDisplay();
+                
+                // 显示通知
+                if (Math.abs(priceChangePercent) > 5) {
+                    showNotification(`${pair}: ${priceChangePercent > 0 ? '大涨' : '大跌'}${Math.abs(priceChangePercent).toFixed(1)}%`);
+                }
+            }
+        }
+        
+        // 渲染交易对表格
+        function renderPairsTable() {
+            const tableBody = document.getElementById('pairs-table-body');
+            tableBody.innerHTML = '';
+            
+            monitoredPairs.forEach(pair => {
+                const data = priceData[pair] || { 
+                    price: '--', 
+                    change24h: 0, 
+                    volume: '--',
+                    quoteVolume: '--'
+                };
+                
+                const changeClass = data.change24h >= 0 ? 'change-positive' : 'change-negative';
+                const changeSign = data.change24h >= 0 ? '+' : '';
+                const changeText = data.change24h !== 0 ? `${changeSign}${data.change24h}%` : '0.00%';
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${pair}</strong></td>
+                    <td>${data.price}</td>
+                    <td class="${changeClass}">${changeText}</td>
+                    <td>${data.volume || '--'}</td>
+                    <td>
+                        <span class="indicator ${getPairStatus(pair)}">
+                            ${getPairStatusText(pair)}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="action-btn btn-danger remove-pair-btn" data-pair="${pair}">
+                                <i class="fas fa-trash"></i> 删除
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            // 更新交易对计数
+            document.getElementById('total-pairs').textContent = monitoredPairs.length;
+            
+            // 绑定删除按钮事件
+            document.querySelectorAll('.remove-pair-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const pair = this.getAttribute('data-pair');
+                    removePair(pair);
+                });
+            });
+        }
+        
+        // 渲染异动表格
+        function renderAlertsTable() {
+            const tableBody = document.getElementById('alerts-table-body');
+            tableBody.innerHTML = '';
+            
+            // 过滤当前时间周期的异动
+            const filteredAlerts = activeTimeframe === '1m' 
+                ? alertData 
+                : alertData.filter(alert => alert.timeframe === activeTimeframe);
+            
+            // 按时间排序（最新的在前）
+            const sortedAlerts = filteredAlerts.sort((a, b) => b.timestamp - a.timestamp);
+            
+            // 显示最近的20个异动
+            const displayAlerts = sortedAlerts.slice(0, 20);
+            
+            if (displayAlerts.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td colspan="6" style="text-align: center; padding: 30px; color: #94a3b8;">当前时间段暂无异动</td>`;
+                tableBody.appendChild(row);
+            } else {
+                displayAlerts.forEach(alert => {
+                    const changeClass = alert.priceChange >= 0 ? 'change-positive' : 'change-negative';
+                    const changeSign = alert.priceChange >= 0 ? '+' : '';
+                    const strengthText = getStrengthText(alert.strength);
+                    const strengthClass = getStrengthClass(alert.strength);
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${alert.pair}</strong></td>
+                        <td>${alert.timeframe}</td>
+                        <td class="${changeClass}">${changeSign}${alert.priceChange}%</td>
+                        <td>${alert.volumeChange}%</td>
+                        <td>
+                            <span class="indicator ${alert.type}">
+                                ${getAlertTypeText(alert.type)}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="alert-badge ${strengthClass}">${strengthText}</span>
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            }
+            
+            // 更新活跃异动计数
+            document.getElementById('active-alerts').textContent = filteredAlerts.length;
+        }
+        
+        // 获取异动类型文本
+        function getAlertTypeText(type) {
+            const typeMap = {
+                'accumulation': '吸筹',
+                'distribution': '砸盘',
+                'volume-spike': '放量',
+                'buy': '买入',
+                'sell': '卖出',
+                'neutral': '中性'
+            };
+            return typeMap[type] || type;
+        }
+        
+        // 获取强度文本
+        function getStrengthText(strength) {
+            if (strength >= 0.8) return '高';
+            if (strength >= 0.5) return '中';
+            return '低';
+        }
+        
+        // 获取强度类名
+        function getStrengthClass(strength) {
+            if (strength >= 0.8) return 'high';
+            if (strength >= 0.5) return 'medium';
+            return 'low';
+        }
+        
+        // 获取交易对状态
+        function getPairStatus(pair) {
+            const pairAlerts = alertData.filter(alert => alert.pair === pair);
+            if (pairAlerts.length === 0) return 'neutral';
+            
+            const hasBuy = pairAlerts.some(alert => alert.type === 'accumulation' || alert.type === 'buy');
+            const hasSell = pairAlerts.some(alert => alert.type === 'distribution' || alert.type === 'sell');
+            
+            if (hasBuy && !hasSell) return 'buy';
+            if (hasSell && !hasBuy) return 'sell';
+            return 'neutral';
+        }
+        
+        // 获取交易对状态文本
+        function getPairStatusText(pair) {
+            const status = getPairStatus(pair);
+            switch(status) {
+                case 'buy': return '买入信号';
+                case 'sell': return '卖出信号';
+                default: return '观望中';
+            }
+        }
+        
+        // 初始化图表
+        async function initChart() {
+            const chartDom = document.getElementById('volume-chart');
+            chartInstance = echarts.init(chartDom);
+            
+            // 初始图表配置
+            const option = {
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'shadow'
+                    },
+                    formatter: function(params) {
+                        let result = params[0].name + '<br/>';
+                        params.forEach(param => {
+                            result += `${param.seriesName}: ${param.value}<br/>`;
+                        });
+                        return result;
+                    }
+                },
+                legend: {
+                    data: ['成交量'],
+                    textStyle: {
+                        color: '#f1f5f9'
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: [],
+                    axisLine: {
+                        lineStyle: {
+                            color: '#94a3b8'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#94a3b8'
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: {
+                        lineStyle: {
+                            color: '#94a3b8'
+                        }
+                    },
+                    axisLabel: {
+                        color: '#94a3b8'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    }
+                },
+                series: [{
+                    name: '成交量',
+                    type: 'bar',
+                    data: [],
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#3b82f6' },
+                            { offset: 1, color: '#1e40af' }
+                        ])
+                    }
+                }]
+            };
+            
+            chartInstance.setOption(option);
+            
+            // 加载初始图表数据
+            await refreshChart();
+        }
+        
+        // 刷新图表
+        async function refreshChart() {
+            if (monitoredPairs.length === 0) return;
+            
+            // 获取交易对数据用于图表
+            const pairsForChart = monitoredPairs.slice(0, 8); // 最多显示8个
+            const volumes = [];
+            
+            for (const pair of pairsForChart) {
+                if (priceData[pair] && priceData[pair].quoteVolume) {
+                    // 提取数值部分
+                    const volStr = priceData[pair].quoteVolume;
+                    const volNum = parseFloat(volStr.replace(/[^0-9.]/g, '')) || 0;
+                    volumes.push({
+                        pair: pair,
+                        volume: volNum
+                    });
+                } else {
+                    volumes.push({
+                        pair: pair,
+                        volume: 0
+                    });
+                }
+            }
+            
+            // 按成交量排序
+            volumes.sort((a, b) => b.volume - a.volume);
+            
+            // 更新图表
+            const option = {
+                xAxis: {
+                    data: volumes.map(v => v.pair)
+                },
+                series: [{
+                    data: volumes.map(v => v.volume)
+                }]
+            };
+            
+            chartInstance.setOption(option);
+        }
+        
+        // 更新交易建议
+        function updateSuggestions() {
+            const suggestionsContent = document.getElementById('suggestions-content');
+            
+            if (monitoredPairs.length === 0) {
+                suggestionsContent.innerHTML = `
+                    <div class="suggestion-item">
+                        <strong>暂无交易对</strong> 请添加交易对以获取建议。
+                    </div>
+                `;
+                return;
+            }
+            
+            let suggestionsHTML = '';
+            
+            // 分析每个交易对
+            monitoredPairs.forEach(pair => {
+                const data = priceData[pair];
+                if (!data) return;
+                
+                const change = parseFloat(data.change24h);
+                const alerts = alertData.filter(a => a.pair === pair);
+                
+                let suggestion = '';
+                let confidence = '低';
+                let signal = 'neutral';
+                
+                // 生成建议逻辑
+                if (change > 5 && alerts.some(a => a.type === 'buy' || a.type === 'accumulation')) {
+                    suggestion = `强势上涨中，考虑逢低买入`;
+                    confidence = '高';
+                    signal = 'buy';
+                } else if (change < -5 && alerts.some(a => a.type === 'sell' || a.type === 'distribution')) {
+                    suggestion = `大幅下跌，建议观望或止损`;
+                    confidence = '高';
+                    signal = 'sell';
+                } else if (change > 2 && change <= 5) {
+                    suggestion = `温和上涨，可考虑轻仓参与`;
+                    confidence = '中';
+                    signal = 'buy';
+                } else if (change < -2 && change >= -5) {
+                    suggestion = `回调中，等待企稳信号`;
+                    confidence = '中';
+                    signal = 'sell';
+                } else if (Math.abs(change) < 1) {
+                    suggestion = `横盘整理，等待方向选择`;
+                    confidence = '低';
+                    signal = 'neutral';
+                } else {
+                    suggestion = `震荡行情，建议观望`;
+                    confidence = '低';
+                    signal = 'neutral';
+                }
+                
+                // 技术指标建议
+                const rsi = calculateRSI(pair);
+                let indicatorSuggestion = '';
+                
+                if (rsi > 70) {
+                    indicatorSuggestion = `RSI超买(${rsi.toFixed(1)})，注意回调风险`;
+                } else if (rsi < 30) {
+                    indicatorSuggestion = `RSI超卖(${rsi.toFixed(1)})，可能有反弹机会`;
+                } else {
+                    indicatorSuggestion = `RSI中性(${rsi.toFixed(1)})`;
+                }
+                
+                suggestionsHTML += `
+                    <div class="suggestion-item">
+                        <strong>${pair}</strong> 
+                        <span class="indicator ${signal}" style="margin-left: 10px;">
+                            ${signal === 'buy' ? '买入' : signal === 'sell' ? '卖出' : '观望'}
+                        </span>
+                        <span class="alert-badge ${confidence === '高' ? 'high' : confidence === '中' ? 'medium' : 'low'}" style="margin-left: 10px;">
+                            ${confidence}信心
+                        </span>
+                        <div style="margin-top: 8px; font-size: 0.95rem;">
+                            ${suggestion} | ${indicatorSuggestion}
+                        </div>
+                        <div style="margin-top: 5px; font-size: 0.85rem; color: #94a3b8;">
+                            价格: ${data.price} | 24h变化: ${change >= 0 ? '+' : ''}${change.toFixed(2)}%
+                        </div>
+                    </div>
+                `;
+            });
+            
+            // 添加一般性建议
+            suggestionsHTML += `
+                <div class="suggestion-item">
+                    <strong>一般交易建议</strong>
+                    <div style="margin-top: 8px; font-size: 0.95rem;">
+                        1. 设置止损：每次开单都应设置止损，一般建议止损幅度为2-5%<br>
+                        2. 仓位管理：单笔交易不超过总资金的5%<br>
+                        3. 趋势交易：跟随主要趋势方向交易，避免逆势操作<br>
+                        4. 风险管理：避免在重大新闻发布前后开大仓
+                    </div>
+                </div>
+            `;
+            
+            suggestionsContent.innerHTML = suggestionsHTML;
+        }
+        
+        // 计算RSI（简化版）
+        function calculateRSI(pair) {
+            // 简化的RSI计算，实际应该基于历史价格数据
+            const data = priceData[pair];
+            if (!data) return 50;
+            
+            const change = parseFloat(data.change24h);
+            
+            // 基于24小时变化估算RSI
+            if (change > 10) return 75;
+            if (change > 5) return 65;
+            if (change > 2) return 55;
+            if (change > 0) return 50;
+            if (change > -2) return 45;
+            if (change > -5) return 35;
+            if (change > -10) return 25;
+            return 15;
+        }
+        
+        // 更新状态显示
+        function updateStatusDisplay() {
+            // 更新最后更新时间
+            updateLastUpdateTime();
+            
+            // 更新活跃异动计数
+            const activeAlerts = alertData.filter(alert => 
+                alert.timestamp > Date.now() - 3600000 // 1小时内的异动
+            ).length;
+            
+            document.getElementById('active-alerts').textContent = activeAlerts;
+        }
+        
+        // 更新连接状态
+        function updateConnectionStatus(status, text) {
+            const statusElement = document.getElementById('connection-status');
+            statusElement.className = `websocket-status ${status}`;
+            
+            const icon = status === 'connected' ? 'fa-wifi' : 
+                        status === 'connecting' ? 'fa-sync fa-spin' : 'fa-plug';
+            
+            statusElement.innerHTML = `<i class="fas ${icon}"></i> ${text}`;
+        }
+        
+        // 更新最后更新时间
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('zh-CN', { 
+                hour12: false,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            
+            document.getElementById('last-update-time').textContent = timeString;
+        }
+        
+        // 启动更新计时器
+        function startUpdateTimer() {
+            setInterval(() => {
+                updateTimer--;
+                document.getElementById('next-update').textContent = updateTimer;
+                
+                if (updateTimer <= 0) {
+                    updateTimer = updateInterval;
+                    
+                    // 定期刷新数据
+                    monitoredPairs.forEach(pair => {
+                        if (Math.random() > 0.7) { // 随机刷新部分交易对
+                            loadPairData(pair);
+                        }
+                    });
+                    
+                    // 更新建议
+                    updateSuggestions();
+                    
+                    // 更新图表
+                    refreshChart();
+                }
+            }, 1000);
+        }
+        
+        // 格式化成交量
+        function formatVolume(volume) {
+            if (volume >= 1e9) {
+                return (volume / 1e9).toFixed(2) + 'B';
+            } else if (volume >= 1e6) {
+                return (volume / 1e6).toFixed(2) + 'M';
+            } else if (volume >= 1e3) {
+                return (volume / 1e3).toFixed(2) + 'K';
+            } else {
+                return volume.toFixed(2);
+            }
+        }
+        
+        // 显示通知
+        function showNotification(message) {
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: var(--card-bg);
+                color: var(--text-color);
+                padding: 15px 20px;
+                border-radius: 10px;
+                border-left: 4px solid var(--primary-color);
+                box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+                z-index: 1000;
+                max-width: 300px;
+                animation: slideIn 0.3s ease;
+            `;
+            
+            notification.innerHTML = `
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-info-circle" style="color: var(--primary-color);"></i>
+                    <div>${message}</div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 3秒后移除
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+        
+        // 添加CSS动画
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', initPage);
+    </script>
+</body>
+</html>
