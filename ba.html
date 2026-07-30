@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🔍 妖币雷达 · GitHub Pages 专用</title>
+    <title>🔍 妖币雷达 V2 · 可调数量 + 跳转 + 数据详解</title>
     <style>
         * { box-sizing: border-box; margin: 0; }
         body {
@@ -13,14 +13,14 @@
             padding: 16px;
             min-height: 100vh;
         }
-        .container { max-width: 1400px; margin: 0 auto; }
+        .container { max-width: 1500px; margin: 0 auto; }
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 12px;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             border-bottom: 1px solid #2a2f3a;
             padding-bottom: 16px;
         }
@@ -32,11 +32,38 @@
             letter-spacing: -0.5px;
         }
         .sub { font-size: 13px; color: #8a8f99; -webkit-text-fill-color: #8a8f99; margin-left: 6px; }
-        .actions {
+        .controls {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 16px;
             flex-wrap: wrap;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #161b24;
+            padding: 4px 12px 4px 16px;
+            border-radius: 30px;
+            border: 1px solid #252b36;
+        }
+        .control-group label {
+            font-size: 13px;
+            color: #b0b7c4;
+        }
+        .control-group input[type="number"] {
+            width: 60px;
+            padding: 4px 6px;
+            background: #0b0e14;
+            border: 1px solid #3a4050;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+            text-align: center;
+        }
+        .control-group input[type="number"]:focus {
+            outline: none;
+            border-color: #f5a623;
         }
         .btn {
             background: #2a2f3a;
@@ -68,7 +95,7 @@
             width: 100%;
             border-collapse: collapse;
             font-size: 13px;
-            min-width: 750px;
+            min-width: 900px;
         }
         th {
             background: #141a24;
@@ -85,7 +112,17 @@
             vertical-align: middle;
         }
         tr:hover td { background: #141b26; }
-        .symbol { font-weight: 700; color: #fff; font-size: 14px; }
+        .symbol-link {
+            font-weight: 700;
+            color: #fff;
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s;
+        }
+        .symbol-link:hover {
+            color: #f5a623;
+            text-decoration: underline;
+        }
         .score {
             font-weight: 800;
             padding: 3px 10px;
@@ -105,7 +142,13 @@
             border-radius: 12px;
             font-size: 11px;
             color: #b0c4de;
-            margin: 2px 2px 2px 0;
+            margin: 2px 4px 2px 0;
+            white-space: nowrap;
+        }
+        .tag .detail {
+            color: #f5c542;
+            font-weight: 600;
+            margin-left: 4px;
         }
         .tag-green { background: #1a3a2a; color: #6fcf97; }
         .tag-red { background: #3a1a1a; color: #f28b82; }
@@ -157,9 +200,12 @@
             transition: width 0.3s;
         }
         .meta-info { font-size: 12px; color: #5a6377; margin-left: 12px; }
-        @media (max-width: 600px) {
+        @media (max-width: 700px) {
             h1 { font-size: 18px; }
-            .actions .btn { padding: 6px 14px; font-size: 13px; }
+            .controls { gap: 8px; }
+            .control-group { padding: 4px 8px; }
+            .control-group input[type="number"] { width: 50px; }
+            .btn { padding: 6px 14px; font-size: 13px; }
             .stats { font-size: 11px; padding: 4px 10px; }
             td, th { padding: 6px 8px; font-size: 12px; }
         }
@@ -169,9 +215,13 @@
 <div class="container">
     <header>
         <div>
-            <h1>⚡ 妖币雷达 <span class="sub">· GitHub Pages 部署</span></h1>
+            <h1>⚡ 妖币雷达 <span class="sub">· V2 数据详解版</span></h1>
         </div>
-        <div class="actions">
+        <div class="controls">
+            <div class="control-group">
+                <label for="limitInput">📊 数量</label>
+                <input type="number" id="limitInput" value="45" min="10" max="100" step="5">
+            </div>
             <span class="stats" id="statsInfo">🟢 就绪</span>
             <button class="btn btn-primary" id="scanBtn" onclick="startScan()">🔎 开始扫描</button>
         </div>
@@ -182,7 +232,7 @@
         <div class="loading">
             <div class="spinner"></div>
             <div>点击「开始扫描」检测全市场吸筹信号</div>
-            <div style="font-size:12px; color:#4a5363; margin-top:8px;">数据来自币安公开 API · 纯前端计算</div>
+            <div style="font-size:12px; color:#4a5363; margin-top:8px;">可调整数量，点击交易对跳转币安合约</div>
         </div>
     </div>
     <div class="footer">
@@ -191,13 +241,12 @@
 </div>
 <script>
     // --------------------------------------------------------------
-    // 1. 核心配置 (针对 GitHub Pages 优化)
+    // 1. 核心配置
     // --------------------------------------------------------------
     const BASE = 'https://fapi.binance.com';
-    const LIMIT_SYMBOLS = 45;           // 取成交额前45个，平衡速度与覆盖面
-    const MIN_VOLUME_USD = 1_800_000;   
-    const CONCURRENCY = 5;              
-    const REQ_TIMEOUT = 8000;           // 8秒超时
+    const MIN_VOLUME_USD = 1_800_000;
+    const CONCURRENCY = 5;
+    const REQ_TIMEOUT = 8000;
 
     const WEIGHTS = {
         CONSOLIDATION: 30,
@@ -215,6 +264,7 @@
     const scanBtn = document.getElementById('scanBtn');
     const statsInfo = document.getElementById('statsInfo');
     const progressFill = document.getElementById('progressFill');
+    const limitInput = document.getElementById('limitInput');
 
     // --------------------------------------------------------------
     // 3. 工具函数
@@ -312,58 +362,64 @@
     }
 
     // --------------------------------------------------------------
-    // 5. 评分算法
+    // 5. 评分算法 (返回分数 + 详细指标)
     // --------------------------------------------------------------
-    function calcConsolidationScore(klines) {
-        if (!klines || klines.length < 20) return 0;
+    function calcConsolidation(klines) {
+        if (!klines || klines.length < 20) return { score: 0, cv: 0 };
         const closes = klines.map(k => k.close);
         const mean = closes.reduce((a,b) => a+b, 0) / closes.length;
-        if (mean === 0) return 0;
+        if (mean === 0) return { score: 0, cv: 0 };
         const std = Math.sqrt(closes.reduce((s, v) => s + (v - mean) ** 2, 0) / closes.length);
         const cv = std / mean;
         const score = Math.max(0, Math.min(100, (0.15 - cv) / 0.11 * 100));
-        return score * (WEIGHTS.CONSOLIDATION / 100);
+        return { score: score * (WEIGHTS.CONSOLIDATION / 100), cv };
     }
 
-    function calcPositionScore(klines, currentPrice) {
-        if (!klines || klines.length < 20 || !currentPrice) return 0;
+    function calcPosition(klines, currentPrice) {
+        if (!klines || klines.length < 20 || !currentPrice) return { score: 0, ratio: 0.5 };
         const highs = klines.map(k => k.high);
         const lows = klines.map(k => k.low);
         const high = Math.max(...highs);
         const low = Math.min(...lows);
-        if (high === low) return WEIGHTS.POSITION;
+        if (high === low) return { score: WEIGHTS.POSITION, ratio: 0 };
         const ratio = (currentPrice - low) / (high - low);
         const score = Math.max(0, Math.min(100, (0.7 - ratio) / 0.4 * 100));
-        return score * (WEIGHTS.POSITION / 100);
+        return { score: score * (WEIGHTS.POSITION / 100), ratio };
     }
 
-    function calcFundingScore(fundingRate) {
-        if (fundingRate === undefined || fundingRate === null) return 0;
+    function calcFunding(fundingRate) {
+        if (fundingRate === undefined || fundingRate === null) return { score: 0, rate: 0 };
         const rate = Math.min(0, fundingRate);
         const score = Math.max(0, Math.min(100, (-rate - 0.00005) / 0.0001 * 100));
-        return score * (WEIGHTS.FUNDING / 100);
+        return { score: score * (WEIGHTS.FUNDING / 100), rate: fundingRate };
     }
 
-    function calcVolumeScore(quoteVolume) {
+    function calcVolume(quoteVolume) {
         const vol = parseFloat(quoteVolume);
-        if (vol < MIN_VOLUME_USD) return 0;
+        if (vol < MIN_VOLUME_USD) return { score: 0, volume: vol };
         const score = Math.min(100, (Math.log10(vol / 1_000_000) / 2) * 100);
-        return Math.max(0, score) * (WEIGHTS.VOLUME / 100);
+        return { score: Math.max(0, score) * (WEIGHTS.VOLUME / 100), volume: vol };
     }
 
-    function calcOIScore(oiGrowth) {
-        if (!oiGrowth || oiGrowth < 0) return 0;
+    function calcOI(oiGrowth) {
+        if (!oiGrowth || oiGrowth < 0) return { score: 0, growth: 0 };
         const score = Math.min(100, (oiGrowth - 0.02) / 0.08 * 100);
-        return Math.max(0, score) * (WEIGHTS.OI_GROWTH / 100);
+        return { score: Math.max(0, score) * (WEIGHTS.OI_GROWTH / 100), growth: oiGrowth };
     }
 
     // --------------------------------------------------------------
     // 6. 主扫描引擎
     // --------------------------------------------------------------
     async function startScan() {
+        // 读取用户设置的数量
+        let limit = parseInt(limitInput.value);
+        if (isNaN(limit) || limit < 10) limit = 10;
+        if (limit > 100) limit = 100;
+        limitInput.value = limit;
+
         setError('');
         scanBtn.disabled = true;
-        resultArea.innerHTML = `<div class="loading"><div class="spinner"></div><div>⏳ 正在扫描全市场合约，请稍候...</div></div>`;
+        resultArea.innerHTML = `<div class="loading"><div class="spinner"></div><div>⏳ 正在扫描前 ${limit} 个高流动性合约，请稍候...</div></div>`;
         setProgress(5);
         setStats('📡 加载数据中...');
 
@@ -375,7 +431,7 @@
             setStats(`📊 已筛选 ${allTickers.length} 个活跃交易对`);
 
             const sorted = allTickers.sort((a,b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume));
-            const candidates = sorted.slice(0, LIMIT_SYMBOLS);
+            const candidates = sorted.slice(0, limit);
             setStats(`🎯 聚焦前 ${candidates.length} 个高流动性标的`);
 
             // Step 2: 资金费率
@@ -403,31 +459,37 @@
                 setStats(`⏳ 分析中 ${completed}/${total} ...`);
 
                 const currentPrice = parseFloat(ticker.lastPrice);
-                const consScore = calcConsolidationScore(klines);
-                const posScore = calcPositionScore(klines, currentPrice);
-                const fundScore = calcFundingScore(fundingMap[symbol]);
-                const volScore = calcVolumeScore(ticker.quoteVolume);
-                const oiScore = calcOIScore(oiGrowth);
+                const cons = calcConsolidation(klines);
+                const pos = calcPosition(klines, currentPrice);
+                const fund = calcFunding(fundingMap[symbol]);
+                const vol = calcVolume(ticker.quoteVolume);
+                const oi = calcOI(oiGrowth);
 
-                const totalScore = consScore + posScore + fundScore + volScore + oiScore;
+                const totalScore = cons.score + pos.score + fund.score + vol.score + oi.score;
 
+                // 构建特征标签（含详细数据）
                 const tags = [];
-                if (consScore > 20) tags.push('📦 横盘');
-                if (posScore > 15) tags.push('⬇️ 低位');
-                if (fundScore > 15) tags.push('🔥 负费率');
-                if (oiScore > 10) tags.push('📈 OI增长');
-                if (tags.length === 0) tags.push('⏳ 观望');
+                if (cons.score > 20) tags.push({ label: '📦 横盘', detail: `CV=${cons.cv.toFixed(3)}` });
+                if (pos.score > 15) tags.push({ label: '⬇️ 低位', detail: `位置=${pos.ratio.toFixed(2)}` });
+                if (fund.score > 15) tags.push({ label: '🔥 负费率', detail: `${(fund.rate * 100).toFixed(3)}%` });
+                if (oi.score > 10) tags.push({ label: '📈 OI增长', detail: `${(oi.growth * 100).toFixed(1)}%` });
+                if (tags.length === 0) tags.push({ label: '⏳ 观望', detail: '' });
 
                 return {
                     symbol,
                     price: currentPrice,
                     change24: parseFloat(ticker.priceChangePercent),
                     volume: parseFloat(ticker.quoteVolume),
-                    funding: fundingMap[symbol] || 0,
-                    oiGrowth: oiGrowth || 0,
+                    funding: fund.rate,
+                    oiGrowth: oi.growth,
                     totalScore,
-                    consScore, posScore, fundScore, volScore, oiScore,
-                    tags
+                    tags,
+                    // 保留原始得分用于排序
+                    consScore: cons.score,
+                    posScore: pos.score,
+                    fundScore: fund.score,
+                    volScore: vol.score,
+                    oiScore: oi.score
                 };
             });
 
@@ -458,15 +520,21 @@
             return;
         }
 
-        const top = data.slice(0, 30);
+        const top = data.slice(0, 50); // 最多展示50个
         let html = `
             <div class="table-wrap">
                 <table>
                     <thead>
                         <tr>
-                            <th>#</th><th>交易对</th><th>价格</th><th>24h 涨跌</th>
-                            <th>成交额</th><th>资金费率</th><th>OI 1h变</th>
-                            <th>综合评分</th><th>特征标签</th>
+                            <th>#</th>
+                            <th>交易对</th>
+                            <th>价格</th>
+                            <th>24h 涨跌</th>
+                            <th>成交额</th>
+                            <th>资金费率</th>
+                            <th>OI 1h变</th>
+                            <th>综合评分</th>
+                            <th>特征标签（含数据）</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -482,12 +550,23 @@
             const changeColor = change > 0 ? '#6fcf97' : '#f28b82';
             const funding = (item.funding * 100).toFixed(3) + '%';
             const oiStr = (item.oiGrowth * 100).toFixed(1) + '%';
-            const tagsHtml = item.tags.map(t => `<span class="tag tag-gold">${t}</span>`).join(' ');
+
+            // 构造跳转链接
+            const binanceUrl = `https://www.binance.com/zh-CN/futures/${item.symbol}`;
+
+            // 构造标签HTML（包含详细数据）
+            const tagsHtml = item.tags.map(t => {
+                if (t.detail) {
+                    return `<span class="tag tag-gold">${t.label} <span class="detail">${t.detail}</span></span>`;
+                } else {
+                    return `<span class="tag tag-gold">${t.label}</span>`;
+                }
+            }).join(' ');
 
             html += `
                 <tr>
                     <td>${idx + 1}</td>
-                    <td><span class="symbol">${item.symbol}</span></td>
+                    <td><a href="${binanceUrl}" target="_blank" class="symbol-link">${item.symbol}</a></td>
                     <td>${item.price.toFixed(4)}</td>
                     <td style="color:${changeColor};">${change > 0 ? '+' : ''}${change.toFixed(2)}%</td>
                     <td>$${(item.volume / 1_000_000).toFixed(1)}M</td>
@@ -500,11 +579,13 @@
         });
 
         html += `</tbody></table></div>`;
-        html += `<div style="margin-top:10px;font-size:12px;color:#4a5363;">✅ 评分越高，吸筹概率越大（基于横盘/低位/费率/OI增长综合判断）</div>`;
+        html += `<div style="margin-top:10px;font-size:12px;color:#4a5363;">
+            ✅ 点击交易对跳转币安合约 · 标签中 <span class="detail" style="color:#f5c542;">黄色数字</span> 为具体指标（CV越小越横盘，位置越小越低，费率越负越好，OI增长越高越好）
+        </div>`;
         resultArea.innerHTML = html;
     }
 
-    // 页面加载完成后显示提示
+    // 页面加载完成
     document.addEventListener('DOMContentLoaded', () => {
         setStats('🟢 就绪，点击扫描');
     });
