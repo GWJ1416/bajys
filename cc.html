@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 多周期支撑压力位 · 5/10/15/30/60min + 1D</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; }
+        body {
+            background: #0b0e14;
+            color: #e5e9f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 14px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1300px; margin: 0 auto; }
+
+        /* 头部 */
+        header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding-bottom: 14px;
+            border-bottom: 1px solid #2a2f3a;
+        }
+        .logo {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #6fc3df, #4a9eff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .logo small {
+            font-size: 13px;
+            -webkit-text-fill-color: #6b7a8f;
+            font-weight: 400;
+            margin-left: 6px;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+        }
+        .controls input[type="text"] {
+            background: #161b24;
+            border: 1px solid #2a2f3a;
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: #fff;
+            font-size: 14px;
+            width: 120px;
+            text-transform: uppercase;
+        }
+        .controls input[type="text"]:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+        .btn {
+            background: #2a2f3a;
+            border: none;
+            color: #e5e9f0;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+        .btn:hover { background: #3a4050; }
+        .btn-primary { background: #4a9eff; color: #0b0e14; }
+        .btn-primary:hover { background: #6fc3df; }
+        .btn-primary:disabled { opacity: 0.4; pointer-events: none; }
+        .btn-outline { background: transparent; border: 1px solid #3a4050; }
+        .btn-outline.active { background: #4a9eff; border-color: #4a9eff; color: #0b0e14; }
+        .btn-outline:hover { border-color: #6fc3df; }
+
+        .stats {
+            font-size: 12px;
+            color: #8a8f99;
+            background: #161b24;
+            padding: 4px 12px;
+            border-radius: 30px;
+            border: 1px solid #252b36;
+        }
+        .stats span { color: #6fc3df; }
+
+        /* 周期切换 */
+        .period-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 16px;
+            background: #12171f;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid #1e232e;
+        }
+        .period-bar .btn {
+            font-size: 12px;
+            padding: 4px 14px;
+        }
+        .period-bar .btn.active {
+            background: #4a9eff;
+            color: #0b0e14;
+            border-color: #4a9eff;
+        }
+
+        /* 价格大号显示 */
+        .price-banner {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 16px;
+            background: #12171f;
+            padding: 14px 20px;
+            border-radius: 12px;
+            border: 1px solid #1e232e;
+            margin-bottom: 18px;
+        }
+        .price-banner .price {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .price-banner .change {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        .price-banner .change.up { color: #6fcf97; }
+        .price-banner .change.down { color: #f28b82; }
+        .price-banner .meta {
+            font-size: 13px;
+            color: #8a8f99;
+            margin-left: auto;
+        }
+        .price-banner .meta span { color: #e5e9f0; }
+
+        /* 双栏布局：支撑 + 压力 */
+        .sr-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-bottom: 18px;
+        }
+        @media (max-width: 700px) {
+            .sr-grid { grid-template-columns: 1fr; }
+        }
+        .sr-card {
+            background: #12171f;
+            border-radius: 12px;
+            border: 1px solid #1e232e;
+            overflow: hidden;
+        }
+        .sr-card .header {
+            padding: 10px 16px;
+            font-weight: 700;
+            font-size: 15px;
+            border-bottom: 1px solid #1e232e;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .sr-card .header .badge {
+            font-size: 11px;
+            font-weight: 400;
+            color: #8a8f99;
+        }
+        .sr-card.support .header { color: #6fcf97; border-bottom-color: #1a3a2a; }
+        .sr-card.resistance .header { color: #f28b82; border-bottom-color: #3a1a1a; }
+
+        .sr-list {
+            padding: 6px 0;
+        }
+        .sr-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 16px;
+            border-bottom: 1px solid #0b0e14;
+            font-size: 13px;
+        }
+        .sr-item:last-child { border-bottom: none; }
+        .sr-item .price-val {
+            font-weight: 700;
+            font-size: 14px;
+        }
+        .sr-item .src {
+            color: #8a8f99;
+            font-size: 12px;
+        }
+        .sr-item .dist {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 10px;
+            border-radius: 20px;
+            background: #1e232e;
+        }
+        .sr-item .dist.near { background: #2a3a2a; color: #6fcf97; }
+        .sr-item .dist.far { background: #3a2a2a; color: #f28b82; }
+        .sr-item .dist.neutral { background: #2a2a3a; color: #b0b7c4; }
+
+        .sr-empty {
+            padding: 20px;
+            text-align: center;
+            color: #4a5363;
+            font-size: 13px;
+        }
+
+        /* 详细表格 */
+        .detail-wrap {
+            background: #12171f;
+            border-radius: 12px;
+            border: 1px solid #1e232e;
+            overflow-x: auto;
+            margin-bottom: 18px;
+        }
+        .detail-wrap .header {
+            padding: 10px 16px;
+            font-weight: 600;
+            font-size: 14px;
+            color: #b0b7c4;
+            border-bottom: 1px solid #1e232e;
+        }
+        .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            min-width: 500px;
+        }
+        .detail-table th {
+            background: #0b0e14;
+            text-align: left;
+            padding: 8px 14px;
+            color: #8a8f99;
+            font-weight: 600;
+            font-size: 12px;
+            border-bottom: 1px solid #1e232e;
+        }
+        .detail-table td {
+            padding: 7px 14px;
+            border-bottom: 1px solid #161b24;
+        }
+        .detail-table tr:hover td { background: #141b26; }
+        .detail-table .tag {
+            display: inline-block;
+            padding: 1px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .tag.support { background: #1a3a2a; color: #6fcf97; }
+        .tag.resistance { background: #3a1a1a; color: #f28b82; }
+        .tag.ma { background: #1a2a3a; color: #6fc3df; }
+        .tag.pivot { background: #3a2a1a; color: #f5c542; }
+        .tag.fibo { background: #2a1a3a; color: #c78bdb; }
+        .tag.hilo { background: #2a2a2a; color: #b0b7c4; }
+
+        .loading {
+            text-align: center;
+            padding: 50px 20px;
+            color: #6b7a8f;
+        }
+        .loading .spinner {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            border: 3px solid #2a2f3a;
+            border-top: 3px solid #4a9eff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .error {
+            background: #2a1215;
+            border: 1px solid #5c1a1a;
+            padding: 12px 18px;
+            border-radius: 8px;
+            color: #f5a3a3;
+            margin: 12px 0;
+        }
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #4a5363;
+            text-align: center;
+            border-top: 1px solid #1e232e;
+            padding-top: 16px;
+        }
+        .progress-bar {
+            height: 2px;
+            background: #1e232e;
+            border-radius: 4px;
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #4a9eff, #6fc3df);
+            transition: width 0.3s;
+        }
+        .highlight { color: #f5c542; font-weight: 600; }
+        .text-muted { color: #6b7a8f; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- 头部 -->
+    <header>
+        <div class="logo">📊 支撑压力位 <small>多周期探测</small></div>
+        <div class="controls">
+            <input type="text" id="symbolInput" value="BTCUSDT" placeholder="交易对">
+            <button class="btn btn-primary" id="scanBtn" onclick="startScan()">🔎 分析</button>
+            <span class="stats" id="statsInfo">🟢 就绪</span>
+        </div>
+    </header>
+
+    <!-- 周期切换 -->
+    <div class="period-bar" id="periodBar">
+        <button class="btn btn-outline active" data-period="5m">5m</button>
+        <button class="btn btn-outline" data-period="10m">10m</button>
+        <button class="btn btn-outline" data-period="15m">15m</button>
+        <button class="btn btn-outline" data-period="30m">30m</button>
+        <button class="btn btn-outline" data-period="1h">1h</button>
+        <button class="btn btn-outline" data-period="1d">1d</button>
+        <span style="margin-left:auto;font-size:12px;color:#4a5363;" id="dataTime"></span>
+    </div>
+
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div id="errorBox"></div>
+
+    <!-- 价格横幅 -->
+    <div class="price-banner" id="priceBanner">
+        <div class="price" id="currentPrice">--</div>
+        <div class="change" id="priceChange">--</div>
+        <div class="meta">📅 <span id="updateTime">--</span></div>
+    </div>
+
+    <!-- 支撑 / 压力 双栏 -->
+    <div class="sr-grid" id="srGrid">
+        <div class="sr-card support">
+            <div class="header">🟢 支撑位 <span class="badge">价格下方关键位置</span></div>
+            <div class="sr-list" id="supportList"><div class="sr-empty">加载中...</div></div>
+        </div>
+        <div class="sr-card resistance">
+            <div class="header">🔴 压力位 <span class="badge">价格上方关键位置</span></div>
+            <div class="sr-list" id="resistanceList"><div class="sr-empty">加载中...</div></div>
+        </div>
+    </div>
+
+    <!-- 详细表格 -->
+    <div class="detail-wrap">
+        <div class="header">📋 全部关键位明细 <span class="text-muted" style="font-weight:400;font-size:12px;margin-left:8px;">点击周期切换刷新数据</span></div>
+        <div id="detailTableWrap">
+            <div class="loading"><div class="spinner"></div><div>请选择周期并点击分析</div></div>
+        </div>
+    </div>
+
+    <div class="footer">
+        ⚠️ 数据仅供参考 · 均线/枢轴点/斐波那契/近期高低点综合计算 · 不构成投资建议
+    </div>
+</div>
+
+<script>
+    // ------------------------------------------------------------
+    // 1. 配置
+    // ------------------------------------------------------------
+    const BASE = 'https://fapi.binance.com';
+    const REQ_TIMEOUT = 10000;
+    const KLINE_LIMIT = 200;          // 各周期获取K线数量
+    const MIN_VOLUME_USD = 500000;
+
+    // 周期映射 (币安interval)
+    const PERIOD_MAP = {
+        '5m': '5m',
+        '10m': '10m',   // 特殊处理：从1m聚合
+        '15m': '15m',
+        '30m': '30m',
+        '1h': '1h',
+        '1d': '1d'
+    };
+
+    // 均线周期
+    const MA_PERIODS = [5, 10, 20, 60, 120];
+
+    // 当前状态
+    let currentSymbol = 'BTCUSDT';
+    let currentPeriod = '5m';
+    let isScanning = false;
+
+    // DOM引用
+    const symbolInput = document.getElementById('symbolInput');
+    const scanBtn = document.getElementById('scanBtn');
+    const statsInfo = document.getElementById('statsInfo');
+    const progressFill = document.getElementById('progressFill');
+    const errorBox = document.getElementById('errorBox');
+    const currentPriceEl = document.getElementById('currentPrice');
+    const priceChangeEl = document.getElementById('priceChange');
+    const updateTimeEl = document.getElementById('updateTime');
+    const dataTimeEl = document.getElementById('dataTime');
+    const supportListEl = document.getElementById('supportList');
+    const resistanceListEl = document.getElementById('resistanceList');
+    const detailTableWrap = document.getElementById('detailTableWrap');
+
+    // ------------------------------------------------------------
+    // 2. 工具函数
+    // ------------------------------------------------------------
+    function setError(msg) {
+        errorBox.innerHTML = msg ? `<div class="error">⚠️ ${msg}</div>` : '';
+    }
+
+    function setProgress(pct) {
+        progressFill.style.width = `${Math.min(100, pct)}%`;
+    }
+
+    function setStats(text, isOk = true) {
+        statsInfo.innerHTML = text;
+        statsInfo.style.color = isOk ? '#b0b7c4' : '#f5a3a3';
+    }
+
+    function timeoutFetch(url, ms = REQ_TIMEOUT) {
+        return Promise.race([
+            fetch(url),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('请求超时，请检查网络')), ms))
+        ]);
+    }
+
+    async function fetchJson(url) {
+        const res = await timeoutFetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // 格式时间
+    function fmtTime(ts) {
+        const d = new Date(ts);
+        return d.toLocaleString('zh-CN', { hour12: false });
+    }
+
+    // 获取最近N根K线 (直接支持币安interval)
+    async function fetchKlines(symbol, interval, limit = KLINE_LIMIT) {
+        const url = `${BASE}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+        const data = await fetchJson(url);
+        return data.map(k => ({
+            open: parseFloat(k[1]),
+            high: parseFloat(k[2]),
+            low: parseFloat(k[3]),
+            close: parseFloat(k[4]),
+            volume: parseFloat(k[5]),
+            time: k[0]
+        }));
+    }
+
+    // 从1分钟K线聚合为指定周期 (仅用于10m)
+    async function fetchAggregatedKlines(symbol, targetInterval, limit = 200) {
+        // targetInterval 如 '10m'
+        const minutes = parseInt(targetInterval);
+        if (isNaN(minutes) || minutes <= 0) throw new Error('无效聚合周期');
+        // 获取足够多的1m K线
+        const need = limit * minutes + 10;
+        const raw = await fetchKlines(symbol, '1m', need);
+        if (raw.length < need) throw new Error('1m数据不足');
+        const result = [];
+        for (let i = 0; i + minutes <= raw.length; i += minutes) {
+            const chunk = raw.slice(i, i + minutes);
+            const high = Math.max(...chunk.map(c => c.high));
+            const low = Math.min(...chunk.map(c => c.low));
+            const open = chunk[0].open;
+            const close = chunk[chunk.length - 1].close;
+            const volume = chunk.reduce((s, c) => s + c.volume, 0);
+            result.push({ open, high, low, close, volume, time: chunk[0].time });
+            if (result.length >= limit) break;
+        }
+        return result;
+    }
+
+    // 获取K线 (统一入口)
+    async function getKlines(symbol, period) {
+        if (period === '10m') {
+            return await fetchAggregatedKlines(symbol, '10', KLINE_LIMIT);
+        }
+        return await fetchKlines(symbol, period, KLINE_LIMIT);
+    }
+
+    // 获取24h ticker
+    async function fetchTicker(symbol) {
+        const data = await fetchJson(`${BASE}/fapi/v1/ticker/24hr?symbol=${symbol}`);
+        return {
+            price: parseFloat(data.lastPrice),
+            change: parseFloat(data.priceChangePercent),
+            volume: parseFloat(data.quoteVolume)
+        };
+    }
+
+    // ------------------------------------------------------------
+    // 3. 指标计算
+    // ------------------------------------------------------------
+
+    // 计算均线
+    function calcMA(klines, period) {
+        if (klines.length < period) return null;
+        const closes = klines.map(k => k.close);
+        const sum = closes.slice(-period).reduce((a, b) => a + b, 0);
+        return sum / period;
+    }
+
+    // 计算近期高低点
+    function calcHiLo(klines, lookback) {
+        if (klines.length < lookback) return { high: null, low: null };
+        const slice = klines.slice(-lookback);
+        const high = Math.max(...slice.map(k => k.high));
+        const low = Math.min(...slice.map(k => k.low));
+        return { high, low };
+    }
+
+    // 计算经典枢轴点 (基于前一根K线)
+    function calcPivot(klines) {
+        if (klines.length < 2) return null;
+        const prev = klines[klines.length - 2];
+        const h = prev.high, l = prev.low, c = prev.close;
+        const p = (h + l + c) / 3;
+        const r1 = 2 * p - l;
+        const s1 = 2 * p - h;
+        const r2 = p + (h - l);
+        const s2 = p - (h - l);
+        return { pivot: p, r1, r2, s1, s2 };
+    }
+
+    // 计算斐波那契回撤 (自动检测最近波段)
+    function calcFibonacci(klines) {
+        if (klines.length < 20) return null;
+        // 找最近20-100根内的最高点和最低点
+        const slice = klines.slice(-100);
+        let highIdx = 0, lowIdx = 0;
+        let highVal = -Infinity, lowVal = Infinity;
+        slice.forEach((k, i) => {
+            if (k.high > highVal) { highVal = k.high; highIdx = i; }
+            if (k.low < lowVal) { lowVal = k.low; lowIdx = i; }
+        });
+        // 判断趋势方向: 最高点出现在最低点之后 => 上涨趋势
+        const isUp = highIdx > lowIdx;
+        const top = isUp ? highVal : lowVal;
+        const bottom = isUp ? lowVal : highVal;
+        const diff = top - bottom;
+        if (diff === 0) return null;
+        const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+        const result = [];
+        for (const lv of levels) {
+            const price = isUp ? top - diff * lv : bottom + diff * lv;
+            result.push({
+                level: lv,
+                price: price,
+                type: isUp ? '支撑' : '压力'
+            });
+        }
+        return { isUp, top, bottom, levels: result };
+    }
+
+    // ------------------------------------------------------------
+    // 4. 核心分析引擎
+    // ------------------------------------------------------------
+    async function analyzeSymbol(symbol, period) {
+        // 获取K线
+        const klines = await getKlines(symbol, period);
+        if (!klines || klines.length < 20) throw new Error('K线数据不足');
+
+        const currentPrice = klines[klines.length - 1].close;
+        const positions = [];
+
+        // ---- 1. 均线 ----
+        for (const ma of MA_PERIODS) {
+            const val = calcMA(klines, ma);
+            if (val !== null) {
+                positions.push({
+                    price: val,
+                    type: val < currentPrice ? '支撑' : '压力',
+                    source: `MA${ma}`,
+                    category: 'ma'
+                });
+            }
+        }
+
+        // ---- 2. 近期高低点 ----
+        const lookbacks = [20, 50, 100];
+        for (const lb of lookbacks) {
+            const { high, low } = calcHiLo(klines, lb);
+            if (high !== null) {
+                positions.push({
+                    price: high,
+                    type: '压力',
+                    source: `${lb}期高点`,
+                    category: 'hilo'
+                });
+            }
+            if (low !== null) {
+                positions.push({
+                    price: low,
+                    type: '支撑',
+                    source: `${lb}期低点`,
+                    category: 'hilo'
+                });
+            }
+        }
+
+        // ---- 3. 枢轴点 ----
+        const pivotData = calcPivot(klines);
+        if (pivotData) {
+            const items = [
+                { price: pivotData.r2, type: '压力', source: 'R2' },
+                { price: pivotData.r1, type: '压力', source: 'R1' },
+                { price: pivotData.pivot, type: '中性', source: 'Pivot' },
+                { price: pivotData.s1, type: '支撑', source: 'S1' },
+                { price: pivotData.s2, type: '支撑', source: 'S2' }
+            ];
+            for (const it of items) {
+                if (it.price !== null && it.price !== undefined && !isNaN(it.price)) {
+                    positions.push({
+                        price: it.price,
+                        type: it.type === '中性' ? '中性' : it.type,
+                        source: it.source,
+                        category: 'pivot'
+                    });
+                }
+            }
+        }
+
+        // ---- 4. 斐波那契 ----
+        const fibData = calcFibonacci(klines);
+        if (fibData) {
+            for (const f of fibData.levels) {
+                const type = f.type === '支撑' ? '支撑' : '压力';
+                const label = f.level === 0 ? '起点' :
+                             f.level === 1 ? '终点' :
+                             `${(f.level * 100).toFixed(1)}%`;
+                positions.push({
+                    price: f.price,
+                    type: type,
+                    source: `Fibo ${label}`,
+                    category: 'fibo'
+                });
+            }
+        }
+
+        // ---- 去重 & 过滤异常 ----
+        const unique = [];
+        const seen = new Set();
+        for (const p of positions) {
+            const key = Math.round(p.price / 0.01) * 0.01;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            // 过滤价格在合理范围内的
+            if (p.price > 0 && p.price < currentPrice * 10) {
+                unique.push(p);
+            }
+        }
+
+        // 重新分类：支撑 / 压力
+        const supports = unique.filter(p => p.price < currentPrice && p.type !== '压力')
+                               .sort((a, b) => b.price - a.price);
+        const resistances = unique.filter(p => p.price > currentPrice && p.type !== '支撑')
+                                  .sort((a, b) => a.price - b.price);
+
+        // 也保留中性（如Pivot）但只展示在明细中，不在双栏显示
+        const neutral = unique.filter(p => p.type === '中性');
+
+        return {
+            klines,
+            currentPrice,
+            supports,
+            resistances,
+            neutral,
+            all: unique
+        };
+    }
+
+    // ------------------------------------------------------------
+    // 5. 渲染
+    // ------------------------------------------------------------
+
+    // 渲染支撑/压力双栏
+    function renderSR(supports, resistances, currentPrice) {
+        // 支撑
+        if (supports.length === 0) {
+            supportListEl.innerHTML = `<div class="sr-empty">暂无支撑位</div>`;
+        } else {
+            let html = '';
+            const topSupports = supports.slice(0, 8);
+            for (const s of topSupports) {
+                const dist = ((currentPrice - s.price) / currentPrice * 100);
+                const distLabel = dist.toFixed(2) + '%';
+                const cls = dist < 3 ? 'near' : (dist < 8 ? 'neutral' : 'far');
+                html += `
+                    <div class="sr-item">
+                        <span class="price-val">${s.price.toFixed(2)}</span>
+                        <span class="src">${s.source}</span>
+                        <span class="dist ${cls}">${distLabel}</span>
+                    </div>
+                `;
+            }
+            if (supports.length > 8) {
+                html += `<div class="sr-item" style="color:#4a5363;font-size:12px;">+ 还有 ${supports.length - 8} 个，见下方明细</div>`;
+            }
+            supportListEl.innerHTML = html;
+        }
+
+        // 压力
+        if (resistances.length === 0) {
+            resistanceListEl.innerHTML = `<div class="sr-empty">暂无压力位</div>`;
+        } else {
+            let html = '';
+            const topResist = resistances.slice(0, 8);
+            for (const r of topResist) {
+                const dist = ((r.price - currentPrice) / currentPrice * 100);
+                const distLabel = dist.toFixed(2) + '%';
+                const cls = dist < 3 ? 'near' : (dist < 8 ? 'neutral' : 'far');
+                html += `
+                    <div class="sr-item">
+                        <span class="price-val">${r.price.toFixed(2)}</span>
+                        <span class="src">${r.source}</span>
+                        <span class="dist ${cls}">${distLabel}</span>
+                    </div>
+                `;
+            }
+            if (resistances.length > 8) {
+                html += `<div class="sr-item" style="color:#4a5363;font-size:12px;">+ 还有 ${resistances.length - 8} 个，见下方明细</div>`;
+            }
+            resistanceListEl.innerHTML = html;
+        }
+    }
+
+    // 渲染详细表格
+    function renderDetail(all, currentPrice) {
+        if (!all || all.length === 0) {
+            detailTableWrap.innerHTML = `<div class="loading">暂无数据</div>`;
+            return;
+        }
+
+        // 按价格排序 (从低到高)
+        const sorted = [...all].sort((a, b) => a.price - b.price);
+
+        let html = `
+            <table class="detail-table">
+                <thead>
+                    <tr>
+                        <th>价格</th>
+                        <th>类型</th>
+                        <th>来源</th>
+                        <th>距当前</th>
+                        <th>分类</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        for (const item of sorted) {
+            const dist = ((item.price - currentPrice) / currentPrice * 100);
+            const distLabel = (dist > 0 ? '+' : '') + dist.toFixed(2) + '%';
+            const typeLabel = item.type === '支撑' ? '🟢 支撑' :
+                             item.type === '压力' ? '🔴 压力' :
+                             '⚪ 中性';
+            const tagClass = item.type === '支撑' ? 'support' :
+                            item.type === '压力' ? 'resistance' : '';
+            const catMap = {
+                'ma': '均线',
+                'pivot': '枢轴点',
+                'fibo': '斐波那契',
+                'hilo': '高低点'
+            };
+            const catLabel = catMap[item.category] || item.category;
+
+            html += `
+                <tr>
+                    <td><strong>${item.price.toFixed(2)}</strong></td>
+                    <td><span class="tag ${tagClass}">${typeLabel}</span></td>
+                    <td>${item.source}</td>
+                    <td style="color:${dist > 0 ? '#f28b82' : '#6fcf97'};">${distLabel}</td>
+                    <td style="font-size:12px;color:#8a8f99;">${catLabel}</td>
+                </tr>
+            `;
+        }
+
+        html += `</tbody></table>`;
+        detailTableWrap.innerHTML = html;
+    }
+
+    // 更新价格横幅
+    function updateBanner(price, change) {
+        currentPriceEl.textContent = price.toFixed(2);
+        priceChangeEl.textContent = (change > 0 ? '+' : '') + change.toFixed(2) + '%';
+        priceChangeEl.className = 'change ' + (change >= 0 ? 'up' : 'down');
+        updateTimeEl.textContent = fmtTime(Date.now());
+        dataTimeEl.textContent = '🔄 ' + fmtTime(Date.now());
+    }
+
+    // ------------------------------------------------------------
+    // 6. 主流程
+    // ------------------------------------------------------------
+    async function startScan() {
+        if (isScanning) return;
+        isScanning = true;
+        scanBtn.disabled = true;
+        setError('');
+        setProgress(5);
+        setStats('📡 获取数据...');
+
+        const symbol = symbolInput.value.trim().toUpperCase();
+        if (!symbol) {
+            setError('请输入交易对，如 BTCUSDT');
+            isScanning = false;
+            scanBtn.disabled = false;
+            return;
+        }
+        currentSymbol = symbol;
+
+        // 获取当前选中的周期
+        const activeBtn = document.querySelector('.period-bar .btn.active');
+        currentPeriod = activeBtn ? activeBtn.dataset.period : '5m';
+
+        try {
+            setProgress(10);
+            setStats(`⏳ 分析 ${symbol} ${currentPeriod} ...`);
+
+            // 并行获取 ticker + K线
+            const [ticker, analysis] = await Promise.all([
+                fetchTicker(symbol),
+                analyzeSymbol(symbol, currentPeriod)
+            ]);
+
+            setProgress(80);
+            setStats(`✅ 分析完成`);
+
+            // 更新价格
+            updateBanner(ticker.price, ticker.change);
+
+            // 渲染支撑/压力
+            renderSR(analysis.supports, analysis.resistances, analysis.currentPrice);
+
+            // 渲染详细表格 (包含所有)
+            const allItems = [
+                ...analysis.supports.map(s => ({ ...s, type: '支撑' })),
+                ...analysis.resistances.map(r => ({ ...r, type: '压力' })),
+                ...analysis.neutral.map(n => ({ ...n, type: '中性' }))
+            ];
+            renderDetail(allItems, analysis.currentPrice);
+
+            setProgress(100);
+            setStats(`✅ ${symbol} ${currentPeriod} 完成 · ${allItems.length} 个关键位`);
+
+        } catch (err) {
+            console.error(err);
+            setError(`分析失败: ${err.message || '请检查交易对或网络'}`);
+            // 显示空状态
+            supportListEl.innerHTML = `<div class="sr-empty">加载失败</div>`;
+            resistanceListEl.innerHTML = `<div class="sr-empty">加载失败</div>`;
+            detailTableWrap.innerHTML = `<div class="loading">❌ ${err.message || '加载失败'}</div>`;
+        } finally {
+            isScanning = false;
+            scanBtn.disabled = false;
+            setProgress(100);
+        }
+    }
+
+    // ------------------------------------------------------------
+    // 7. 事件绑定
+    // ------------------------------------------------------------
+
+    // 周期切换
+    document.querySelectorAll('.period-bar .btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.period-bar .btn').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            // 自动重新扫描
+            if (!isScanning) startScan();
+        });
+    });
+
+    // 回车触发扫描
+    symbolInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') startScan();
+    });
+
+    // 默认加载
+    document.addEventListener('DOMContentLoaded', () => {
+        // 默认选中5m
+        setTimeout(startScan, 300);
+    });
+
+    // 暴露给全局
+    window.startScan = startScan;
+</script>
+</body>
+</html>
